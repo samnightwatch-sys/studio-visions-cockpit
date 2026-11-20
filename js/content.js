@@ -8,8 +8,8 @@ window.SV = {
   draft: true,
   version: "v8.6-a",
   oracleUrl: "#oracle",
-  /* le site officiel : le poste de pilotage en est une pièce, signée du studio */
-  home: { url: "https://fantastic-terms-202563.framer.app/", label: "Site Studio Visions" },
+  /* le site Framer : c'est le site personnel de Sam (son parcours, ses images), pas « le site du studio » */
+  home: { url: "https://fantastic-terms-202563.framer.app/", label: "Le site perso de Sam" },
   signature: "Poste de pilotage — développé par Studio Visions",
   media: "media/",
   img: "img/",
@@ -43,7 +43,7 @@ window.SV = {
     modesLabel: "Les autres entrées",
     modes: {
       oracle: { n: "02", label: "Talk with the Nightwatch Oracle", desc: "Ton projet chiffré en cinq questions" },
-      site: { n: "03", label: "Le site classique ↗", desc: "Qui est Sam, ce que le studio a déjà fait" },
+      site: { n: "03", label: "Vers moi ↗", desc: "Sam Ahodikpe : mon site perso, mon parcours, mes images" },
       oath: { n: "04", label: "Le serment", desc: "La promesse de la Nightwatch" }
     },
     /* la scène de particules : nom de la forme en cours, nombre réel de particules affichées */
