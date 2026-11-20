@@ -6,7 +6,7 @@
    ===================================================================== */
 window.SV = {
   draft: true,
-  version: "v8.6-a",
+  version: "v8.7-a",
   oracleUrl: "#oracle",
   /* le site Framer : c'est le site personnel de Sam (son parcours, ses images), pas « le site du studio » */
   home: { url: "https://fantastic-terms-202563.framer.app/", label: "Le site perso de Sam" },
@@ -46,8 +46,35 @@ window.SV = {
       site: { n: "03", label: "Vers moi ↗", desc: "Sam Ahodikpe : mon site perso, mon parcours, mes images" },
       oath: { n: "04", label: "Le serment", desc: "La promesse de la Nightwatch" }
     },
-    /* la scène de particules : nom de la forme en cours, nombre réel de particules affichées */
-    forms: { helix: "ADN", galaxy: "Galaxie", count: "particules" }
+    /* le menu, dit comme dans un jeu : un mot de jeu, puis ce que ça fait */
+    game: {
+      label: "Menu principal",
+      start: ["NEW GAME", "Entrer dans le poste de pilotage"],
+      cont: ["CONTINUE", "Reprendre le vol"],
+      oracle: ["MISSION ORACLE", "Talk with the Nightwatch Oracle : ton projet chiffré"],
+      site: ["SPECIAL ↗", "Vers moi : le site perso de Sam"],
+      oath: ["CINEMATIC", "Le serment de la Nightwatch"],
+      options: ["OPTIONS", ""],
+      soundOn: "Son : activé",
+      soundOff: "Son : coupé",
+      hint: "↑ ↓ CHOISIR · ENTRÉE VALIDER · CLIC DANS LE VIDE : TRANSFORMER",
+      hintTouch: "TOUCHE UNE LIGNE · TOUCHE LE VIDE POUR TRANSFORMER"
+    },
+    /* relevés de la scène de particules : libellés seulement, les valeurs viennent de la simulation */
+    data: {
+      helix: "ADN", galaxy: "Galaxie", count: "particules", morph: "Transformation", spin: "Rotation", fps: "Images / s", aim: "Viseur",
+      strandA: "Brin A", strandB: "Brin B", link: "Paire de bases", atom: "Atome", dust: "Poussière",
+      pair: "Paire", angle: "Angle", depth: "Profondeur", radius: "Rayon",
+      bulge: "Bulbe", arm: "Bras", disc: "Disque", halo: "Halo", star: "Étoile lointaine", inRing: "Dans le viseur"
+    }
+  },
+
+  /* ---------- LA PORTE D'ENTRÉE : rien ne démarre avant le premier geste (les navigateurs l'exigent pour le son) ---------- */
+  gate: {
+    start: "PRESS START",
+    quiet: "Démarrer sans le son",
+    hint: "ENTRÉE OU CLIC",
+    hintTouch: "TOUCHE POUR DÉMARRER"
   },
 
   /* ---------- SON ET VOIX : un seul bouton, toujours visible, coupe tout ---------- */

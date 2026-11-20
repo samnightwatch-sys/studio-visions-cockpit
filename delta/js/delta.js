@@ -6,10 +6,10 @@
 (function () {
   "use strict";
   const S = window.SV;
-  S.version = "Delta 0.1";
+  S.version = "Delta 0.2";
   S.signature = "Cockpit Delta — développé par Studio Visions";
   S.title.tag = "(SV® — Cockpit Delta)";
-  S.title.playCap = "Le Cockpit Delta";
+  S.title.game.start[1] = "Entrer dans le Cockpit Delta";
   S.deck.callsign = "COCKPIT DELTA";
   S.deck.hello = "Cockpit Delta en ligne. Les sept caps sont sur l'anneau. Touche-en un, ou ouvre le menu.";
   S.deck.keys = "← → OU MOLETTE : TOURNER · ENTRÉE : OUVRIR · / : MENU · N : VISION · M : SON";

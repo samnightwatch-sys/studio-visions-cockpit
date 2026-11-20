@@ -380,9 +380,49 @@
       const a = c.createGain(); a.gain.setValueAtTime(g || .2, t); a.gain.exponentialRampToValueAtTime(.0001, t + d);
       s.connect(f); f.connect(a); a.connect(master); s.start(t);
     }
+    /* sons enregistrés : un seul fichier découpé en repères [début, durée].
+       Le fichier est demandé à l'avance, décodé au premier geste, et ne joue que si le son est actif. */
+    const CUES = { beeps: [0.0, 5.9], startup: [6.3, 4.0], riser: [10.7, 5.0], tinnitus: [16.1, 2.5], impact: [19.0, 5.5], flyby: [24.9, 3.7], door: [29.0, 2.1], whale: [31.5, 9.0] };
+    const BANK_URL = ((window.SV && window.SV.media) || "media/") + "sfx.mp3";
+    let bank = null, bytesP = null, bankP = null, live = {};
+    function prefetch() {
+      if (!on || bytesP) return;
+      bytesP = fetch(BANK_URL).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+    }
+    function loadBank() {
+      const c = ensure(); if (!c) return null;
+      if (!bankP) {
+        prefetch();
+        bankP = (bytesP || Promise.resolve(null)).then(b => (b ? new Promise(res => c.decodeAudioData(b, res, () => res(null))) : null)).then(buf => { bank = buf; return buf; });
+      }
+      return bankP;
+    }
+    function cut(name, fade) {
+      const p = live[name]; if (!p || !ctx) return;
+      delete live[name];
+      const t = ctx.currentTime, d = fade || .2;
+      try { p.g.gain.cancelScheduledValues(t); p.g.gain.setTargetAtTime(0, t, d / 3); p.s.stop(t + d + .05); } catch (e) {}
+    }
     return {
       get on() { return on; },
-      toggle(v) { on = v === undefined ? !on : v; store.set("sv7.sound", on ? "1" : "0"); if (on) { ensure(); this.select(); } else this.hum(false); return on; },
+      prefetch,
+      /* joue un repère du fichier ; opt : { gain, delay } */
+      cue(name, opt) {
+        const c = ensure(), q = CUES[name]; if (!c || !q) return;
+        const go = () => {
+          if (!bank || !on) return;
+          cut(name, .05);
+          const sN = c.createBufferSource(), gN = c.createGain(), t = c.currentTime + ((opt && opt.delay) || 0);
+          sN.buffer = bank; gN.gain.value = (opt && opt.gain) || .8;
+          sN.connect(gN); gN.connect(c.destination); sN.start(t, q[0], q[1]);
+          const rec = live[name] = { s: sN, g: gN };
+          sN.onended = () => { if (live[name] === rec) delete live[name]; };
+        };
+        if (bank) go(); else { const pr = loadBank(); if (pr) pr.then(go); }
+      },
+      cut,
+      cutAll(fade) { Object.keys(live).forEach(k => cut(k, fade)); },
+      toggle(v) { on = v === undefined ? !on : v; store.set("sv7.sound", on ? "1" : "0"); if (on) { ensure(); this.select(); } else { this.hum(false); this.cutAll(.1); } return on; },
       unlock() { armed = true; ensure(); },
       move() { tone(1480, .03, "square", .07); },
       select() { tone(740, .045, "square", .1); tone(1110, .07, "square", .1, .05); },

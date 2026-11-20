@@ -427,3 +427,68 @@ body.vis-thermal #oracle,body.vis-thermal #dossier{background-color:#06031a}
 .gl-tabs a{color:#d9d9df}
 .gl-step{border-color:rgba(255,255,255,.62)}
 .dk-top .status,.dk-top .clock .dim{color:#d5d5dc}
+
+/* ---------- porte d'entrée : « press start », puis le démarrage prend son temps ---------- */
+#boot .gate{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center;padding:24px}
+#boot .gate[hidden]{display:none}
+.g-name{margin:0 0 6px;font-size:clamp(34px,6vw,84px);font-weight:700;letter-spacing:-.05em;line-height:1;color:#fff}
+.g-name sup{font-size:.22em;letter-spacing:0;vertical-align:top;position:relative;top:.5em;margin-left:.1em}
+.g-start{display:inline-flex;align-items:center;gap:14px;height:64px;padding:0 34px 0 26px;border:1px solid #fff;border-radius:32px;font-size:15px;letter-spacing:.22em;color:#fff;box-shadow:0 0 0 10px rgba(255,255,255,.08);animation:halo 2.2s ease-in-out infinite,gblink 1.3s steps(2,start) infinite}
+.g-start i{width:0;height:0;border-left:11px solid currentColor;border-top:7px solid transparent;border-bottom:7px solid transparent}
+.g-start:hover,.g-start:focus-visible{background:#fff;color:#000;animation:none}
+@keyframes gblink{50%{color:rgba(255,255,255,.55)}}
+.g-quiet{padding:10px 6px;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:#e2e2e8;border-bottom:1px solid rgba(255,255,255,.4)}
+.g-quiet:hover,.g-quiet:focus-visible{color:#fff;border-bottom-color:#fff}
+.g-hint{margin:0;font-size:10.5px;letter-spacing:.24em;color:var(--mute)}
+#boot .log{font-size:clamp(12px,1.35vw,15px);line-height:2.3}
+
+/* ---------- accueil : l'essaim prend tout l'écran, le texte et le menu sont posés dessus ---------- */
+#title::before{background:linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.34) 34%,rgba(0,0,0,0) 58%),linear-gradient(to right,rgba(0,0,0,.62),rgba(0,0,0,0) 46%)}
+.en-form{display:flex;flex-direction:column;gap:3px;font-size:10.5px;letter-spacing:.1em}
+.en-form b{margin-bottom:4px}
+.en-form span{display:block;color:#c9c9d0;font-variant-numeric:tabular-nums}
+.en-name{font-size:clamp(40px,min(9.4vw,19vh),158px)}
+.en-line{margin-bottom:clamp(14px,2.4vh,24px)}
+/* le menu, comme dans un jeu : une ligne sélectionnée, un curseur, un mot de jeu et ce qu'il fait */
+.gm{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;width:min(560px,100%)}
+.gm button{position:relative;width:100%;display:grid;grid-template-columns:26px minmax(118px,auto) minmax(0,1fr);align-items:baseline;gap:12px;padding:10px 16px 10px 30px;text-align:left;color:#fff;border-left:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.35)}
+.gm button small{font-size:10px;letter-spacing:.1em;color:#b9b9c2}
+.gm button b{font-size:15px;font-weight:700;letter-spacing:.14em}
+.gm button span{font-size:13px;color:#d5d5dc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gm button::before{content:"";position:absolute;left:11px;top:50%;margin-top:-5px;border-left:8px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent;opacity:0}
+.gm button.sel{background:#fff;color:#000;border-left-color:#fff}
+.gm button.sel small,.gm button.sel span{color:#333}
+.gm button.sel::before{opacity:1;animation:blinkdot 1s steps(2,start) infinite}
+.gm button:focus-visible{outline:none}
+.gm-hint{margin:14px 0 0;font-size:10px;letter-spacing:.18em;color:#b9b9c2}
+@media (max-width:860px){
+  .en-form{top:62px;font-size:9.5px}
+  .en-form span:nth-child(n+4){display:none}
+  #title{grid-template-rows:auto 1fr auto}             /* le menu tient en bas, sous le pouce ; l'essaim garde le haut de l'écran */
+  .en-main{align-self:end;padding:18px 0 14px}
+  .en-k{margin-bottom:10px;font-size:11px}
+  .en-line{margin:10px 0 14px;font-size:19px}
+  .gm button{grid-template-columns:22px minmax(0,1fr);gap:1px 10px;padding:8px 12px 8px 28px}
+  .gm button b{font-size:14px}
+  .gm button span{grid-column:2;font-size:12px}
+  .gm-hint{margin-top:10px;letter-spacing:.1em}
+  .en-foot{padding-top:10px;gap:3px;font-size:10.5px}
+}
+/* petit écran en hauteur : seule l'entrée choisie garde sa phrase */
+@media (max-width:860px) and (max-height:640px){
+  .gm button span{display:none}
+  .gm button.sel span{display:block}
+  .en-foot .en-r{display:none}
+}
+/* téléphone couché : le menu passe sur deux colonnes */
+@media (max-width:960px) and (max-height:520px){
+  .en-k,.en-line,.gm-hint{display:none}
+  .en-main{padding:10px 0 10px}
+  .en-name{margin-bottom:12px}
+  .gm{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;width:100%}
+  .gm button{grid-template-columns:22px minmax(0,1fr);gap:0 10px;padding:8px 12px 8px 28px}
+  .gm button span{display:none}
+  .en-foot{flex-direction:row;padding-top:8px}
+  .en-foot .en-r{display:none}
+}
+@media (prefers-reduced-motion:reduce){.g-start,.gm button.sel::before{animation:none!important}}

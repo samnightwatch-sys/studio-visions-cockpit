@@ -69,15 +69,40 @@
     clearTimeout(toast.id); toast.id = setTimeout(() => t.classList.remove("on"), 2000);
   }
 
-  /* ---------------------------------------------------------------- BOOT */
-  function boot(quick) {
+  /* ---------------------------------------------------------------- BOOT
+     Rien ne démarre avant le premier geste : les navigateurs interdisent le son sans lui.
+     « Press start » lance donc la séquence, avec ou sans le son, et elle prend son temps. */
+  let bootRun = false;
+  function boot() {
     clearTimers();
     show("boot");
-    const el = $("#boot"), log = $(".log", el);
+    bootRun = false;
+    const el = $("#boot"), G = S.gate;
     el.classList.remove("p2", "off");
     $(".presents p", el).textContent = S.title.presents;
-    log.innerHTML = "";
-    const per = quick ? 60 : 130;
+    $(".log", el).innerHTML = "";
+    $("#skip").hidden = true;
+    Sfx.prefetch();
+    let gate = $(".gate", el);
+    if (!gate) { gate = document.createElement("div"); gate.className = "gate"; el.appendChild(gate); }
+    gate.hidden = false;
+    gate.innerHTML =
+      '<p class="g-name">Studio Visions<sup>®</sup></p>' +
+      '<button type="button" class="g-start" data-s="1"><i aria-hidden="true"></i>' + esc(G.start) + "</button>" +
+      '<button type="button" class="g-quiet" data-s="0">' + esc(G.quiet) + "</button>" +
+      '<p class="g-hint" aria-hidden="true">' + esc(touch ? G.hintTouch : G.hint) + "</p>";
+    gate.onclick = e => { const b = e.target.closest("[data-s]"); if (b) { e.stopPropagation(); bootStart(b.dataset.s === "1"); } };
+    $(".g-start", gate).focus({ preventScroll: true });
+  }
+  function bootStart(sound) {
+    if (bootRun || current !== "boot") return;
+    bootRun = true;
+    setSound(sound, true);
+    const el = $("#boot"), log = $(".log", el), per = 560;
+    $(".gate", el).hidden = true;
+    $("#skip").hidden = false;
+    Sfx.cue("startup", { gain: .7 });                      /* le terminal s'allume, puis les bips de données */
+    Sfx.cue("beeps", { gain: .55, delay: .5 });
     let i = 0;
     (function next() {
       if (i < S.boot.length) {
@@ -89,64 +114,94 @@
         later(next, per);
       } else {
         const cur = document.createElement("div"); cur.innerHTML = '<span class="cursor"></span>'; log.appendChild(cur);
-        if (quick) { later(endBoot, 420); return; }
-        later(() => { el.classList.add("p2"); Sfx.boot(); }, 420);
-        later(() => el.classList.add("off"), 1750);
-        later(endBoot, 2200);
+        later(() => el.classList.add("p2"), 700);
+        later(() => el.classList.add("off"), 3600);
+        later(endBoot, 4050);
       }
     })();
+    /* la montée se termine au moment où l'accueil apparaît */
+    later(() => Sfx.cue("riser", { gain: .6 }), Math.max(0, S.boot.length * per + 4050 - 5000));
   }
-  function endBoot() { clearTimers(); booted = true; goTitle(); }
+  function bootKey(k) { if (!bootRun) bootStart(k !== "Escape"); else endBoot(); }
+  function endBoot() {
+    clearTimers();
+    const first = !booted;
+    booted = true; bootRun = false;
+    Sfx.cut("beeps", .2); Sfx.cut("startup", .2); Sfx.cut("riser", .3);
+    goTitle();
+    if (first) Sfx.cue("impact", { gain: .8 });
+  }
 
-  /* ---------------------------------------------------------------- ENTRÉE
-     Même geste que sur le site officiel : un grand bouton avec le son, un lien sans le son.
+  /* ---------------------------------------------------------------- ACCUEIL
+     Plein écran : l'essaim (ADN, galaxie) avec ses relevés en direct, et un menu de jeu.
      Le nom s'écrit toujours comme le logotype : « Studio Visions », jamais tout en capitales. */
   const svName = '<span class="sv-name">Studio Visions</span>';
   const sig = () => esc(S.signature).replace("Studio Visions", svName);
   const homeA = () => (S.home && S.home.url)
     ? '<a href="' + esc(S.home.url) + '" target="_top" rel="noopener">' + esc(S.home.label) + " ↗</a>" : "";
+  let tItems = [], tSel = 0;
   function goTitle() {
     clearTimers();
     show("title");
     document.title = "Cockpit Delta — Studio Visions";
-    const t = S.title, home = S.home && S.home.url;
-    const mode = (m, attrs) => '<a class="en-mode" data-n="' + m.n + '" ' + attrs + "><small>" + m.n + "</small><b>" + esc(m.label) + "</b><span>" + esc(m.desc) + "</span></a>";
+    const t = S.title, G = t.game, home = S.home && S.home.url, seen = store.get("sv7.seen") === "1";
+    tItems = [
+      { id: "start", label: seen ? G.cont[0] : G.start[0], desc: seen ? G.cont[1] : G.start[1] },
+      { id: "oracle", label: G.oracle[0], desc: G.oracle[1] },
+      home ? { id: "site", label: G.site[0], desc: G.site[1] } : null,
+      { id: "oath", label: G.oath[0], desc: G.oath[1] },
+      { id: "sound", label: G.options[0], desc: "" }
+    ].filter(Boolean);
     $("#title").innerHTML =
       '<canvas class="adn" id="adn" aria-hidden="true"></canvas>' +
       '<header class="en-top"><span>© ' + svName + '</span><span class="en-mid">' + esc(t.tag) + "</span></header>" +
-      '<p class="en-form" id="enForm" aria-hidden="true"></p>' +
+      '<div class="en-form" id="enForm" aria-hidden="true"></div>' +
       '<div class="en-main">' +
         '<p class="en-k">' + esc(t.kicker) + "</p>" +
         '<h1 class="en-name">' + esc(t.name) + "<sup>®</sup></h1>" +
         '<p class="en-line">' + esc(t.line) + "</p>" +
-        '<p class="en-sub">' + esc(t.sub) + "</p>" +
-        '<p class="en-cap"><small>01</small>' + esc(t.playCap) + "</p>" +
-        '<div class="en-acts">' +
-          '<button type="button" class="play" data-act="start"><i aria-hidden="true"></i>' + esc(t.start) + "</button>" +
-          '<button type="button" class="en-quiet" data-act="quiet">' + esc(t.quiet) + "</button>" +
-        "</div>" +
-        /* les autres entrées, comme le menu d'un jeu : l'Oracle, le site classique, le serment */
-        '<nav class="en-modes" aria-label="' + esc(t.modesLabel) + '">' +
-          mode(t.modes.oracle, 'data-oracle href="' + esc(S.oracleUrl) + '"') +
-          (home ? mode(t.modes.site, 'href="' + esc(home) + '" target="_top" rel="noopener"') : "") +
-          mode(t.modes.oath, 'href="#serment"') +
-        "</nav>" +
+        '<ul class="gm" role="menu" aria-label="' + esc(G.label) + '">' + tItems.map((m, i) =>
+          '<li role="none"><button type="button" role="menuitem" data-i="' + i + '"><small>' + pad(i + 1) + "</small><b>" + esc(m.label) + "</b><span>" + esc(m.desc) + "</span></button></li>").join("") + "</ul>" +
+        '<p class="gm-hint" aria-hidden="true">' + esc(touch ? G.hintTouch : G.hint) + "</p>" +
       "</div>" +
       '<footer class="en-foot"><span>' + sig() + '</span><span class="en-r">' + esc(t.place) + " · " + esc(S.version) + "</span></footer>";
-    $(".en-acts").addEventListener("click", e => { const b = e.target.closest("[data-act]"); if (b) enter(b.dataset.act === "start"); });
-    /* l'essaim : hélice d'ADN, visuels du studio, galaxie. Un clic ou un doigt dans le vide : forme suivante. */
-    const F = t.forms, lab = $("#enForm");
-    window.Adn.mount($("#adn"), metItems(), (kind, it, n) => {
-      lab.innerHTML = "<b>" + esc(kind === "image" ? it.label : F[kind]) + "</b><span>" + esc(n.toLocaleString("fr-BE") + " " + F.count) + "</span>";
+    const menu = $(".gm");
+    menu.addEventListener("mouseover", e => { const b = e.target.closest("button"); if (b && +b.dataset.i !== tSel) { tSel = +b.dataset.i; tPaint(false); Sfx.move(); } });
+    menu.addEventListener("click", e => { const b = e.target.closest("button"); if (b) { tSel = +b.dataset.i; tPaint(false); tAct(); } });
+    tSel = 0; tPaint(true);
+    /* relevés de la scène, en direct : ce sont les valeurs de la simulation */
+    const X = t.data, lab = $("#enForm");
+    window.Adn.mount($("#adn"), X, s => {
+      lab.innerHTML = "<b>" + esc(s.kind === "helix" ? X.helix : X.galaxy) + "</b>" +
+        "<span>" + esc(s.n.toLocaleString("fr-BE") + " " + X.count) + "</span>" +
+        "<span>" + esc(X.morph + " " + Math.round(s.morph * 100) + " %") + "</span>" +
+        "<span>" + esc(X.spin + " " + s.spin.toFixed(2) + " rad/s") + "</span>" +
+        "<span>" + esc(X.fps + " " + s.fps) + "</span>" +
+        (s.x === null ? "" : "<span>" + esc(X.aim + " x " + s.x.toFixed(2) + " · y " + s.y.toFixed(2)) + "</span>");
     });
     window.Adn.ink(VISION[vision].ink, VISION[vision].m5);
     window.Adn.start();
-    const p = $("#title .play"); p && p.focus({ preventScroll: true });
   }
-  /* entrée dans le poste : avec ou sans le son, selon le bouton choisi */
-  function enter(sound) {
-    setSound(sound, true);
+  function tPaint(focus) {
+    const G = S.title.game, bs = $$(".gm button");
+    bs.forEach((b, i) => {
+      b.classList.toggle("sel", i === tSel);
+      if (tItems[i] && tItems[i].id === "sound") $("span", b).textContent = Sfx.on ? G.soundOn : G.soundOff;
+    });
+    if (focus && bs[tSel]) bs[tSel].focus({ preventScroll: true });
+  }
+  function tAct() {
+    const id = tItems[tSel].id;
+    if (id === "start") enter();
+    else if (id === "oracle") { Sfx.select(); Sfx.cue("tinnitus", { gain: .5 }); oracleGo(); }
+    else if (id === "site") { Sfx.select(); window.open(S.home.url, "_top"); }
+    else if (id === "oath") { Sfx.select(); go("#serment"); }
+    else if (id === "sound") { toggleSound(); tPaint(false); }
+  }
+  /* entrée dans le poste : le vaisseau passe, la porte se ferme */
+  function enter() {
     Sfx.select();
+    Sfx.cue("flyby", { gain: .7 }); Sfx.cue("door", { gain: .6, delay: .9 });
     if (store.get("sv8.tilt") === "1") tiltOn(true);
     store.set("sv7.seen", "1");
     go("#vol");
@@ -492,6 +547,7 @@
     b.setAttribute("aria-label", on ? L.offTip : L.onTip);
     $(".lb", b).innerHTML = '<span class="v">' + esc(t[0]) + "</span>" + esc(t[1]);
     paintVoice();
+    if (current === "title") tPaint(false);
   }
   function paintVoice() {
     const on = Voice.on && Sfx.on, any = Voice.voices().length > 0;
@@ -1411,21 +1467,14 @@
     if ((k === "v" || k === "V") && (current === "hq" || current === "oracle")) { e.preventDefault(); if (Voice.listening) Voice.stop(); else talkStart(); return; }
 
     if (current === "boot") {
-      if (k === "Enter" || k === " " || k === "Escape") { e.preventDefault(); endBoot(); }
+      if (k === "Enter" || k === " " || k === "Escape") { e.preventDefault(); bootKey(k); }
       return;
     }
-    if (current === "title") {
-      const f = $$("#title .en-acts button, #title .en-mode"), i = f.indexOf(document.activeElement);
-      if (/^[1-9]$/.test(k)) {                              /* comme dans un menu de jeu : 1 décoller, 2, 3, 4 les autres entrées */
-        const a = k === "1" ? null : $('#title .en-mode[data-n="0' + k + '"]');
-        if (k === "1") { e.preventDefault(); enter(true); } else if (a) { e.preventDefault(); a.click(); }
-        return;
-      }
-      if (/^Arrow/.test(k) && f.length) {
-        e.preventDefault();
-        f[(Math.max(i, 0) + ((k === "ArrowRight" || k === "ArrowDown") ? 1 : -1) + f.length) % f.length].focus();
-        Sfx.move();
-      } else if ((k === "Enter" || k === " ") && i < 0) { e.preventDefault(); enter(true); }   /* sur un bouton, le navigateur s'en charge */
+    if (current === "title") {                              /* menu de jeu : flèches, Entrée, ou le numéro de la ligne */
+      const n = tItems.length;
+      if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); tSel = (tSel + (k === "ArrowDown" ? 1 : -1) + n) % n; tPaint(true); Sfx.move(); }
+      else if (k === "Enter" || k === " ") { e.preventDefault(); tAct(); }
+      else if (/^[1-9]$/.test(k) && +k <= n) { e.preventDefault(); tSel = +k - 1; tPaint(true); tAct(); }
       return;
     }
     if (current === "oath") {
@@ -1480,8 +1529,13 @@
     if (current === "boot") endBoot();
     else if (current === "oath") { store.set("sv7.seen", "1"); go("#vol"); }
   });
-  $("#boot").addEventListener("click", () => { if (current === "boot") endBoot(); });   /* un clic suffit pour passer */
-  $("#title").addEventListener("click", e => { if (current === "title" && !e.target.closest("a,button")) window.Adn.next(); });
+  $("#boot").addEventListener("click", () => { if (current === "boot" && bootRun) endBoot(); });   /* une fois lancée, un clic suffit pour passer */
+  /* un clic ou un doigt dans le vide : l'essaim change de forme à partir de ce point */
+  $("#title").addEventListener("click", e => {
+    if (current !== "title" || e.target.closest("a,button")) return;
+    const r = $("#adn").getBoundingClientRect(), k = window.Adn.next(e.clientX - r.left, e.clientY - r.top);
+    if (k) { Sfx.select(); if (k === "galaxy") Sfx.cue("whale", { gain: .45 }); }
+  });
   /* après un clic de souris sur un bouton du poste, le clavier reprend la main (Entrée engage, ← → tournent) */
   document.addEventListener("click", e => {
     if (!e.detail || current !== "hq" || D.open || !e.target.closest) return;
@@ -1504,7 +1558,7 @@
     if (!a) {
       if (current === "boot") return;
       backHash = "#";
-      if (!booted && !EMBED) boot(store.get("sv7.seen") === "1");
+      if (!booted && !EMBED) boot();
       else { booted = true; goTitle(); }
       return;
     }
