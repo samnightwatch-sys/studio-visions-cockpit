@@ -1,0 +1,93 @@
+/* =====================================================================
+   STUDIO VISIONS — COCKPIT DELTA
+   Se charge après les styles de la v8 et ne redéfinit que le poste :
+   un seul écran de visée, les écrans de bord en superposition (sans
+   cadres opaques), le relief en retrait, un menu en colonnes.
+   ===================================================================== */
+
+/* fond en retrait : quadrillage très léger et bords assombris, entre le relief et l'interface */
+body[data-screen="hq"]::before{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 50% 44%,rgba(0,0,0,0) 28%,rgba(0,0,0,.62) 100%),
+    linear-gradient(rgba(255,255,255,.032) 1px,transparent 1px) 0 0/64px 64px,
+    linear-gradient(90deg,rgba(255,255,255,.032) 1px,transparent 1px) 0 0/64px 64px}
+
+/* barre du haut : posée sur l'image, sans bandeau */
+.dk-top{border-bottom:0;background:linear-gradient(to bottom,rgba(0,0,0,.78),rgba(0,0,0,0));backdrop-filter:none;-webkit-backdrop-filter:none}
+.dk-pillar,.dk-prompt{display:none}
+.wp span{font-size:9.5px;letter-spacing:.16em}
+.wp:not(.sel) i{width:10px;height:10px}
+
+/* ---------- grand écran : tout tient dans l'écran de visée ---------- */
+@media (min-width:861px) and (min-height:521px){
+  #hq{grid-template-rows:auto minmax(0,1fr)!important}
+  .dk-wind::after{height:46%;background:linear-gradient(to top,rgba(0,0,0,.9) 8%,rgba(0,0,0,.5) 55%,rgba(0,0,0,0))}
+  .dk-arrow{top:41%}
+  .dk-coach{top:54px;bottom:auto}
+
+  /* les trois écrans de bord deviennent des relevés posés sur l'image : caps à gauche, copilote au centre, cap choisi à droite */
+  .dk-mfds{position:absolute;left:0;right:0;bottom:0;z-index:4;height:auto;display:grid;grid-template-columns:minmax(210px,290px) minmax(0,1fr) minmax(300px,430px);align-items:end;gap:28px;
+    padding:0 var(--gut) 22px;background:none;border:0;box-shadow:none;pointer-events:none}
+  .mfd{padding:0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible;pointer-events:auto}
+  .mfd h2{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line2);letter-spacing:.2em}
+  .mfd-nav{grid-column:1;grid-row:1}
+  .mfd-co{display:flex;grid-column:2;grid-row:1;justify-self:center;width:min(100%,400px)}
+  .mfd-tgt{grid-column:3;grid-row:1}
+  .mfd-nav .mlist{overflow:visible}
+  .mfd-nav .mi{padding:5px 8px;border-radius:0}
+  .mfd-nav .mi .l{font-size:15px;letter-spacing:.05em}
+  .mfd-nav .mi:not([aria-current]):hover{background:rgba(255,255,255,.1)}
+  .tg-l{margin:6px 0 8px;font-size:clamp(32px,3.5vw,58px)}
+  .tg-d{margin-bottom:14px;font-size:14.5px}
+  .tg-keys{display:none}
+  /* le copilote au centre, en bas */
+  .mfd-co h2{display:none}
+  .co-row{display:flex;flex-direction:column;align-items:center;gap:6px}
+  #holo{width:108px;height:138px;min-height:0;max-height:none}
+  .co-txt{align-items:center;text-align:center;gap:4px}
+  .co-line{min-height:2.7em;max-width:40ch;font-size:13px;line-height:1.35;color:var(--ink)}
+  .co-acts{justify-content:center;margin-top:6px}
+  body.paneled .dk-mfds{display:none}
+
+  /* le contenu d'un cap s'ouvre en fenêtre posée sur l'image, qui reste visible autour */
+  #panel.glass{top:92px;bottom:30px;left:max(var(--gut),calc(50% - 610px));right:max(var(--gut),calc(50% - 610px));border-radius:0;border-color:var(--line2);
+    background:rgba(4,6,9,.8);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  #panel.glass::before,#panel.glass::after{content:"";position:sticky;display:block;height:0;pointer-events:none}
+  .gl-head{background:rgba(4,6,9,.9)}
+}
+@media (min-width:861px) and (max-width:1180px) and (min-height:521px){
+  .dk-mfds{grid-template-columns:minmax(200px,240px) minmax(0,1fr) minmax(260px,330px);gap:18px}
+  #holo{width:96px;height:124px}
+}
+
+/* ---------- téléphone : la disposition de la v8, avec la peau Delta ---------- */
+@media (max-width:860px){
+  .dk-mfds{border-top:0;background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.92) 34%);box-shadow:none}
+  .mfd{border:0;border-radius:0;background:none;box-shadow:none;padding:6px 2px}
+  .mfd h2{padding-bottom:8px;border-bottom:1px solid var(--line2)}
+  .wp:not(.sel) span{display:none}                     /* sur l'anneau, seul le cap choisi porte son nom */
+}
+@media (orientation:landscape) and (max-height:520px){
+  .dk-mfds{border-top:0;background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.9) 40%)}
+  .mfd{border:0;background:none;box-shadow:none}
+  .wp:not(.sel) span{display:none}
+}
+
+/* ---------- le menu : une superposition en colonnes, comme le menu d'un jeu ---------- */
+#cmd{padding:11vh 24px 24px;background:rgba(0,0,0,.74);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.cmd-box{width:min(1180px,100%);padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+#cmd input{padding:12px 2px;border:0;border-bottom:1px solid var(--line2);border-radius:0;background:none;font-size:22px}
+#cmd input:focus{border-color:#fff}
+#cmdList{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));align-items:start;gap:18px 34px;margin-top:24px;padding-right:4px}
+#cmdList .cg-col ul{list-style:none;margin:0;padding:0}
+#cmdList .cg{margin:0 0 6px;padding:0 0 8px;border-bottom:1px solid var(--line2);letter-spacing:.18em}
+#cmdList [role=option]{padding:9px 8px;border-radius:0}
+.cmd-hint{margin-top:22px}
+@media (max-width:560px){#cmd{padding:8vh 16px 16px}#cmdList{gap:14px;margin-top:16px}}
+
+/* vision thermique : les relevés gardent leur fond transparent */
+body.vis-thermal .dk-mfds,body.vis-thermal .mfd{background:none}
+body.vis-thermal[data-screen="hq"]::before{background:
+    radial-gradient(ellipse at 50% 44%,rgba(6,3,26,0) 28%,rgba(6,3,26,.7) 100%),
+    linear-gradient(rgba(255,150,90,.05) 1px,transparent 1px) 0 0/64px 64px,
+    linear-gradient(90deg,rgba(255,150,90,.05) 1px,transparent 1px) 0 0/64px 64px}
