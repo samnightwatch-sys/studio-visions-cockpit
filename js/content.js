@@ -15,13 +15,14 @@ window.SV = {
   img: "img/",
 
   boot: [
-    ["NWF-01 « VEILLEUR » — SÉQUENCE DE DÉMARRAGE", "v8.0"],
+    ["NWF-01 « VEILLEUR » — SÉQUENCE DE DÉMARRAGE", "{version}"]            /* {version} : remplacé par le numéro réel */,
     ["(c) 2026 NIGHT WATCH FORCES", "夜警"],
     ["ALIMENTATION PRINCIPALE", "OK"],
     ["CENTRALE INERTIELLE — LA ROCHE-EN-ARDENNE 50°11′N 05°34′E", "ALIGNÉE"],
     ["LIDAR", "EN ROTATION"],
-    ["CHARGE UTILE : 41 BRIQUES / 6 FAMILLES", "ARRIMÉE"],
+    ["CHARGE UTILE : PRINT · SITES · CAMPAGNES · PITCHS", "ARRIMÉE"],
     ["CAP 2030", "VERROUILLÉ"],
+    ["MODULE IA", "EN OPTION"],
     ["COPILOTE ORACLE", "EN ATTENTE"]
   ],
 
@@ -46,26 +47,27 @@ window.SV = {
       site: { n: "03", label: "Vers moi ↗", desc: "Sam Ahodikpe : mon site perso, mon parcours, mes images" },
       oath: { n: "04", label: "Le serment", desc: "La promesse de la Nightwatch" }
     },
-    /* le menu, dit comme dans un jeu : un mot de jeu, puis ce que ça fait */
+    /* le menu, dit comme dans un jeu. Règle : le mot de jeu en anglais et en capitales,
+       puis une phrase en français qui dit ce qui se passe (45 caractères au plus, pour le téléphone) */
     game: {
       label: "Menu principal",
       start: ["NEW GAME", "Entrer dans le poste de pilotage"],
       cont: ["CONTINUE", "Reprendre le vol"],
-      oracle: ["MISSION ORACLE", "Talk with the Nightwatch Oracle : ton projet chiffré"],
-      site: ["SPECIAL ↗", "Vers moi : le site perso de Sam"],
+      oracle: ["MISSION ORACLE", "Ton projet chiffré en cinq questions"],
+      site: ["PLAYER 1 ↗", "Vers moi : Sam Ahodikpe, mon site perso"],
       oath: ["CINEMATIC", "Le serment de la Nightwatch"],
-      options: ["OPTIONS", ""],
-      soundOn: "Son : activé",
-      soundOff: "Son : coupé",
-      hint: "↑ ↓ CHOISIR · ENTRÉE VALIDER · CLIC DANS LE VIDE : TRANSFORMER",
-      hintTouch: "TOUCHE UNE LIGNE · TOUCHE LE VIDE POUR TRANSFORMER"
+      options: ["SOUND", ""],
+      soundOn: "Activé · appuie pour couper",
+      soundOff: "Coupé · appuie pour activer",
+      hint: "↑ ↓ CHOISIR · ENTRÉE VALIDER · CLIQUE DANS LE VIDE : ADN ↔ GALAXIE",
+      hintTouch: "TOUCHE UNE LIGNE POUR ENTRER · TOUCHE LE VIDE : ADN ↔ GALAXIE"
     },
     /* relevés de la scène de particules : libellés seulement, les valeurs viennent de la simulation */
     data: {
       helix: "ADN", galaxy: "Galaxie", count: "particules", morph: "Transformation", spin: "Rotation", fps: "Images / s", aim: "Viseur",
       strandA: "Brin A", strandB: "Brin B", link: "Paire de bases", atom: "Atome", dust: "Poussière",
       pair: "Paire", angle: "Angle", depth: "Profondeur", radius: "Rayon",
-      bulge: "Bulbe", arm: "Bras", disc: "Disque", halo: "Halo", star: "Étoile lointaine", inRing: "Dans le viseur"
+      bulge: "Bulbe", arm: "Bras", disc: "Disque", halo: "Halo", star: "Étoile lointaine", inRing: "Points dans le viseur"
     }
   },
 
@@ -73,8 +75,8 @@ window.SV = {
   gate: {
     start: "PRESS START",
     quiet: "Démarrer sans le son",
-    hint: "ENTRÉE OU CLIC",
-    hintTouch: "TOUCHE POUR DÉMARRER"
+    hint: "AVEC LE SON · ENTRÉE OU CLIC",
+    hintTouch: "AVEC LE SON · TOUCHE POUR DÉMARRER"
   },
 
   /* ---------- SON ET VOIX : un seul bouton, toujours visible, coupe tout ---------- */

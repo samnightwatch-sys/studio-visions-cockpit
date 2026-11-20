@@ -106,7 +106,7 @@
     let i = 0;
     (function next() {
       if (i < S.boot.length) {
-        const [k, v] = S.boot[i];
+        const k = S.boot[i][0], v = S.boot[i][1].replace("{version}", S.version);
         const ln = document.createElement("div");
         ln.className = "ln";
         ln.innerHTML = '<span class="k">' + (i > 1 ? "&gt; " : "") + esc(k) + '</span><span class="d"></span><span class="v' + (v === "EN ATTENTE" ? " wait" : "") + '">' + esc(v) + "</span>";
@@ -175,9 +175,9 @@
       lab.innerHTML = "<b>" + esc(s.kind === "helix" ? X.helix : X.galaxy) + "</b>" +
         "<span>" + esc(s.n.toLocaleString("fr-BE") + " " + X.count) + "</span>" +
         "<span>" + esc(X.morph + " " + Math.round(s.morph * 100) + " %") + "</span>" +
-        "<span>" + esc(X.spin + " " + s.spin.toFixed(2) + " rad/s") + "</span>" +
+        "<span>" + esc(X.spin + " " + s.spin.toFixed(2).replace(".", ",") + " rad/s") + "</span>" +
         "<span>" + esc(X.fps + " " + s.fps) + "</span>" +
-        (s.x === null ? "" : "<span>" + esc(X.aim + " x " + s.x.toFixed(2) + " · y " + s.y.toFixed(2)) + "</span>");
+        (s.x === null ? "" : "<span>" + esc(X.aim + " x " + s.x.toFixed(2).replace(".", ",") + " · y " + s.y.toFixed(2).replace(".", ",")) + "</span>");
     });
     window.Adn.ink(VISION[vision].ink, VISION[vision].m5);
     window.Adn.start();

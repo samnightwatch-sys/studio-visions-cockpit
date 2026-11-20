@@ -117,9 +117,9 @@
       if (c < 4) { out.push(L.pair + " " + pa[i] + " / " + PAIRS); out.push(L.angle + " " + Math.round((pa[i] - .5) / PAIRS * TURNS * 360 % 360) + "°"); }
     } else {
       out.push(c === 0 ? L.bulge : c >= 10 ? L.arm + " " + (c - 9) + " / 4" : c === 2 ? L.disc : c === 3 ? L.halo : L.star);
-      if (c !== 4) out.push(L.radius + " " + pa[i].toFixed(2));
+      if (c !== 4) out.push(L.radius + " " + pa[i].toFixed(2).replace(".", ","));
     }
-    out.push(L.depth + " " + (pz[i] >= 0 ? "+" : "") + pz[i].toFixed(2));
+    out.push(L.depth + " " + (pz[i] >= 0 ? "+" : "") + pz[i].toFixed(2).replace(".", ","));
     return out;
   }
 
