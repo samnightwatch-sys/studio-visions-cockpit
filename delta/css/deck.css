@@ -413,3 +413,17 @@ body.vis-thermal #oracle,body.vis-thermal #dossier{background-color:#06031a}
   .gl-head{padding:5px 8px}
 }
 @media (prefers-reduced-motion:reduce){.wp.sel::before,.play,.sndpill .eq b,.dk-coach,#panel.glass.up,#panel.glass.wipe .pin,#dossier.in{animation:none!important}}
+
+/* ---------- les commandes restent lisibles en permanence, quel que soit le fond : libellé blanc, filet marqué, fond sombre ---------- */
+.hud-btn,.skip{color:#fff;border-color:rgba(255,255,255,.62);background:rgba(0,0,0,.64);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.hud-btn kbd,.btn kbd{opacity:.85}
+.sndpill,.sndpill[data-on="0"]{color:#fff;border-color:rgba(255,255,255,.62);background:rgba(0,0,0,.68)}
+.sndpill:hover,.sndpill:focus-visible{color:#000;border-color:#fff;background:#fff}
+.dk-arrow{opacity:1;border-color:rgba(255,255,255,.62);background:rgba(0,0,0,.64)}
+.vis{border-color:rgba(255,255,255,.5);background:rgba(0,0,0,.7)}
+.vis button{color:#fff}
+.vis .vl{color:#d5d5dc}
+.en-quiet{color:#e2e2e8}
+.gl-tabs a{color:#d9d9df}
+.gl-step{border-color:rgba(255,255,255,.62)}
+.dk-top .status,.dk-top .clock .dim{color:#d5d5dc}
