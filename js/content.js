@@ -430,7 +430,7 @@ window.SV = {
       invalid: "Il manque ton nom, ton email ou ce que tu veux faire."
     },
     directLabel: "EN DIRECT",
-    email: "sam@studiovisions.eu",
+    email: "sam@studiovisions.io",
     phone: "+32 494 92 66 00",
     phoneHref: "+32494926600",
     place: "La Roche-en-Ardenne, Belgique, et Bruxelles sur rendez-vous",
