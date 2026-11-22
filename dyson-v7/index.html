@@ -1,0 +1,1901 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<script>
+/* =====================================================================
+   LAB V7 : DYSON  (née de Singularité, qui reste telle quelle dans lab-v4-singularite.html ; Dyson v6 reste dans lab-v6-dyson.html)
+   Chaque souvenir a sa propre orbite, sur son propre axe : les plus anciens s'éloignent puis reviennent frôler le noyau, les récents gravitent plus près.
+   Glisse pour faire tourner toute la galaxie sur tous ses axes ; glisse sur la frise des années pour plonger jusqu'au souvenir.
+   Tes visuels sont faits de particules et tournent autour d'un trou noir.
+   Une partie de leurs particules part vers lui en spirale, puis revient
+   reformer l'image. La souris est une seconde gravité : elle tire le
+   visuel qu'elle approche, le reforme et le rend plus net.
+   Clic maintenu : la mémoire se trouble.
+   Rendu en 3D sur la carte graphique (Three.js) ; GSAP pilote la boucle
+   et la souris. Sans souris, la boucle est parfaite.
+   Design : celui de la version mère (cockpit.studiovisions.io).
+   Tout se règle ici. Recharge la page après une modification.
+   ===================================================================== */
+const CONFIG = {
+  /* --- la boucle --- */
+  loopDuration: 48,     // secondes pour une boucle complète (sans souris, la dernière image est identique à la première)
+
+  /* --- les visuels en particules --- */
+  density: 120,         // points sur le plus grand côté d'un visuel, sur ordinateur (plus grand : image plus fine, plus lourd)
+  densityPhone: 70,     // la même chose sur téléphone
+  maxPoints: 200000,    // plafond de particules pour l'ensemble des visuels, sur ordinateur
+  maxPointsPhone: 46000,
+  plateHeight: 2.0,     // taille du plus grand côté d'un visuel, en unités de scène (le trou noir a un rayon de 0.6)
+  relief: 0.38,         // relief : les zones claires d'un visuel avancent vers toi
+  orbRadius: 0.5,       // de loin, chaque photo est un objet : une sphère de points de ce rayon, à ses couleurs
+  openAt: 5.3,          // elle s'ouvre et devient lisible quand elle passe à cette distance devant le trou noir (les orbites vont jusqu'à 7.4)
+  focusDensity: 400,    // points sur le grand côté de la photo visée ou choisie : sa version fine, lisible
+  thruMax: 12,          // agrandissement auquel on a fini de traverser la photo (à partir de 5, elle se défait et on entre dedans)
+  showTime: 3.5,        // secondes pendant lesquelles une photo cliquée reste présentée devant toi, avant de repartir
+  brightness: 0.75,     // luminosité des visuels (plus bas : les images claires gardent leurs détails)
+  /* --- les orbites : une par souvenir, chacune sur son propre axe. Plus un souvenir est ancien, plus son orbite est lointaine et allongée --- */
+  orbitNear: 2.9,       // demi-grand axe de l'orbite du souvenir le plus récent, en unités de scène
+  orbitFar: 4.9,        // celui du plus ancien
+  eccNear: 0.07,        // excentricité du plus récent (0 : cercle parfait)
+  eccFar: 0.5,          // celle du plus ancien : il s'éloigne jusqu'à 7,4 puis revient frôler le noyau à 2,5
+  tiltMin: 8,           // inclinaison la plus faible d'une orbite, en degrés
+  tiltMax: 78,          // la plus forte : chaque souvenir tourne sur son propre axe
+  sway: 1,              // toute la galaxie bascule lentement sur plusieurs axes (0 : à plat). La boucle reste parfaite
+  swayPitch: 20,        // amplitude de la bascule avant-arrière, en degrés
+  swayRoll: 14,         // et de la bascule de côté
+  spin: 1,              // tours que fait toute la galaxie sur elle-même par boucle (entier ; négatif : sens inverse ; 0 : aucun)
+  axes: true,           // dessine les orbites en filigrane, et une traînée lumineuse derrière chaque souvenir
+  trail: 0.3,           // longueur de la traînée, en part de l'orbite
+  tidal: 1,             // un souvenir qui frôle le noyau s'étire vers lui (0 : non)
+  drift: 0.0009,        // la galaxie suit les moindres mouvements de la souris : sensibilité (0 : jamais)
+  inertia: 1.5,         // amortissement de cet élan : plus grand, plus vite elle s'arrête
+  tilt: true,           // sur téléphone : incliner l'appareil incline la galaxie
+  tiltStrength: 0.55,   // et de combien
+  swipe: true,          // une photo affichée : balaye ou flèches pour passer à la suivante
+
+  /* --- les particules qui partent et reviennent --- */
+  flow: 0.3,            // part des particules de chaque visuel qui voyagent, de 0 à 1
+  flowCycles: 2,        // allers-retours pendant une boucle (entier)
+
+  /* --- le trou noir --- */
+  holeRadius: 0.6,      // rayon de la sphère noire
+  discParticles: 38000, // particules du disque (ordinateur ; divisé par deux et demi sur téléphone)
+  discInner: 0.95,      // bord intérieur du disque
+  discOuter: 2.7,       // bord extérieur du disque
+  comets: 26,           // nombre de comètes
+  cometTail: 70,        // particules par comète
+  stars: 5000,          // étoiles du fond
+
+  /* --- la souris --- */
+  reach: 2.0,           // rayon d'attraction de la souris, en unités de scène
+  pull: 0.42,           // force avec laquelle un visuel est tiré vers la souris, de 0 à 1
+  lift: 0.6,            // le visuel approché avance vers toi, en unités de scène
+  grow: 0.2,            // et grossit (0.2 : 20 % plus grand)
+  core: 0.3,            // rayon du petit trou noir sous la souris
+  press: 2.2,           // masse de la souris quand tu cliques et maintiens (au repos : 1)
+  parallax: 0.9,        // déplacement de la caméra avec la souris
+  zoomMin: 0.5,         // au plus près : la photo visée est présentée, puis affichée en HD
+  zoomMax: 22,          // au plus loin : tout le système n'est plus qu'un point au milieu d'un amas d'étoiles
+  wheelUpApproaches: true, // deux doigts vers le haut : on approche (false : l'inverse)
+
+  /* --- le rendu --- */
+  offsetX: 0.07,        // décalage de la scène vers la droite, en part de la largeur d'écran (le titre est à gauche)
+  bloom: "auto",        // halo lumineux : true, false, ou "auto" (coupé sur téléphone)
+  bloomStrength: 0.4,   // force du halo
+  look: "couleur",      // "couleur" : souvenirs en bulles de couleur, points plus gros, sans halo (le rendu de tes captures) ; "dense" : 200 000 points et halo
+  intro: true,          // la scène s'allume progressivement
+  guide: true,          // avant d'entrer, un écran explique les gestes
+  idleAfter: 6,         // secondes sans geste avant que la scène vienne te chercher
+  strikes: 3,           // au repos : comètes qui percutent un souvenir pendant une boucle (entier ; 0 : aucune)
+  dyson: true,          // la frise des années : en glissant dessus, tu plonges dans l'essaim, jusqu'au souvenir choisi
+  diveDepth: 4.6,       // une fois plongé : distance entre toi et le souvenir visé, en unités de scène (plus petit : plus près)
+  ghost: true,          // au repos : un viseur fantôme montre le geste, il approche un souvenir qui s'ouvre
+  music: "assets/_audio/boundary.mp3", // la musique de fond, lancée à l'entrée ("" : aucune)
+  musicVolume: 0.55,    // son volume, de 0 à 1
+  musicFade: 3.5,       // secondes pour monter doucement à l'entrée
+  links: true,          // des filaments relient les souvenirs voisins, parcourus par des influx, comme des neurones
+  hud: true,            // affiche le titre, les relevés et le viseur
+
+  /* --- les images --- */
+  images: ["2023/D9BCEE78-47FD-45C5-8E61-5A26067F60D1.jpg", "2023/F4AAA8E6-0A81-41C4-A9C7-4FFD1C53613B_1_105_c.jpg", "2023/F7A11FB3-8B94-4EA4-BC4F-7B61DD64D220_1_102_o.jpg", "2023/FB000687-F5D0-4671-8772-85AB05A54106.jpg", "2023/FDDF14CA-C565-4DD3-BC3D-39667AD9A958_1_102_o.jpg", "2023/PHOTO-2023-04-14-10-57-35.jpg", "2023/PHOTO-2023-09-15-14-53-16.jpg", "2024/52138D31-9889-4516-803E-FB8AEFE15B46_1_102_o.jpg", "2024/PHOTO-2024-05-21-10-23-40_5.jpg", "2024/PHOTO-2024-05-21-10-23-40_8.jpg", "2024/PHOTO-2024-05-21-10-23-40.jpg", "2024/PHOTO-2024-05-22-14-09-05.jpg", "2024/PHOTO-2024-05-22-14-09-07_3.jpg", "2024/PHOTO-2024-11-19-23-55-47.jpg", "2025/Billboard_Mockup_copy_copie.jpg", "2025/Black.jpg", "2025/PHOTO-2025-11-25-18-03-36.jpg", "2025/PHOTO-2025-12-12-14-40-57_6.jpg", "2025/PHOTO-2025-12-12-14-40-57_7.jpg", "2025/basic_mockup.jpg", "2025/cinematic_close-up_portrait_of_the_Hexapod_A.jpg", "2025/cinematic_medium_shot_of_the_Symbiote_Child.jpg", "2025/extreme_close-up_of_a_KID_noize_huma_4ef7bde.jpg", "2025/u3618933917_abstract_black_and_white_close-u.jpg", "2025/velevet6.jpg", "2026/Final_1.jpg", "2026/Full_design_3.jpg", "2026/Full_design_4.jpg", "2026/Full_design_5.jpg", "2026/Full_design_copie_2.jpg", "2026/Gemini_Generated_Image_p7pew6p7pew6p7pe.jpg", "2026/Mockup_Window_Poster_2.jpg", "2026/PHOTO-2026-03-07-16-58-55.jpg", "2026/PHOTO-2026-03-07-17-20-12_2.jpg", "2026/STUDIO_VISIONS_cover_4K_v1.jpg", "2026/grok-image-9817a7c9-e646-4ef8-95a2-8ac8b3fa1.jpg", "2026/hf_20260723_114151_62781232-c693-48d7-924b-4.jpg"],  // vide : le dossier assets/ est lu tout seul, avec ses sous-dossiers.
+                        // Un sous-dossier = un dossier de travail, nommé « AAAA Nom », par exemple « 2019 Raskin ».
+                        // L'année se lit au début du nom du dossier (ou du fichier). Deux années ou plus : une orbite par année.
+                        // Ouvert sans serveur (double-clic), le navigateur interdit de lire les images : aplats gris.
+};
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Dyson v7 · Studio Visions</title>
+<!-- Police de la version mère : Instrument Sans, SIL Open Font License (vérifiée) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* Couleurs et typographie reprises de l'accueil du cockpit (v8/css/deck.css) */
+:root{
+  --bg:#000; --fg:#fff; --ink:#c9c9d0; --soft:#b9b9c2; --ion:#a9d4ff;
+  --line:rgba(255,255,255,.16);
+  --one:"Instrument Sans",sans-serif;
+  --gut:clamp(18px,3vw,44px);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hidden}
+body{font-family:var(--one);-webkit-font-smoothing:antialiased;touch-action:none}
+
+#gl{position:fixed;inset:0;display:block;width:100%;height:100%}
+.veil{position:fixed;inset:0;pointer-events:none;
+  background:linear-gradient(to top,rgba(0,0,0,.78) 0%,rgba(0,0,0,.3) 30%,rgba(0,0,0,0) 54%),linear-gradient(to right,rgba(0,0,0,.5),rgba(0,0,0,0) 40%),linear-gradient(to left,rgba(0,0,0,.8),rgba(0,0,0,.5) 16%,rgba(0,0,0,0) 34%)}
+
+/* le viseur : le même que sur l'accueil, il suit la souris */
+.sight{position:fixed;left:0;top:0;z-index:4;width:0;height:0;pointer-events:none;opacity:0;will-change:transform,opacity}
+.sight i{position:absolute;left:-75px;top:-75px;width:150px;height:150px;border:1px solid rgba(255,255,255,.34);border-radius:50%;will-change:transform}
+#hd{position:fixed;left:0;top:0;z-index:2;display:block;max-width:none;transform-origin:0 0;opacity:0;pointer-events:none;will-change:transform,opacity;visibility:hidden}
+#hud{position:fixed;inset:0;z-index:3;display:block;width:100%;height:100%;pointer-events:none}
+/* le panneau d'analyse : l'année, le dossier, puis les couleurs et l'orbite du souvenir visé */
+.an{position:fixed;z-index:4;right:calc(var(--gut) + 76px);top:212px;width:248px;margin:0;pointer-events:none;font-variant-numeric:tabular-nums}
+.an-y{margin:0;font-weight:700;font-size:64px;line-height:.88;letter-spacing:-.055em;color:#fff;white-space:nowrap}
+.an-n{margin:10px 0 2px;font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-f{margin:0 0 14px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-ui{pointer-events:auto}
+.an-pal{display:flex;gap:1px;height:30px}
+/* les couleurs sont des boutons : survolées, elles grandissent ; choisies, seuls leurs souvenirs restent allumés */
+.an-pal button{appearance:none;position:relative;min-width:7px;height:100%;margin:0;padding:0;border:0;cursor:pointer;transform-origin:50% 100%;transition:transform .25s cubic-bezier(.22,1,.36,1),opacity .2s,box-shadow .2s}
+.an-pal:hover button{opacity:.55}
+.an-pal button:hover,.an-pal button:focus-visible,.an-pal button.on{opacity:1;transform:scale(1.6,1.9);z-index:2;box-shadow:0 0 0 1px #fff;outline:none}
+.an-fl{margin:24px 0 0}
+.an-fl[hidden]{display:none}
+.an-chip{appearance:none;display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:6px 11px 6px 7px;border:1px solid rgba(255,255,255,.7);border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font:400 10px var(--one);letter-spacing:.06em;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.an-chip i{flex:none;width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+.an-chip:hover,.an-chip:focus-visible{background:#fff;color:#000;outline:none}
+.an-th{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:10px}
+.an-th button{appearance:none;position:relative;aspect-ratio:1;margin:0;padding:0;overflow:hidden;border:1px solid rgba(255,255,255,.25);background:#111;cursor:pointer;transition:transform .25s cubic-bezier(.22,1,.36,1),border-color .2s}
+.an-th button:hover,.an-th button:focus-visible{transform:scale(1.35);z-index:2;border-color:#fff;outline:none}
+.an-th img{display:block;width:100%;height:100%;object-fit:cover}
+/* la frise des années, à droite : comme une ligne du temps, elle grossit sous le doigt */
+.rail{position:fixed;z-index:6;right:var(--gut);top:212px;bottom:236px;width:64px;margin:0;padding:0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:auto}
+.rail[hidden]{display:none}
+.dys{position:fixed;z-index:6;left:50%;top:74px;transform:translateX(-50%);display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);padding:5px 6px 5px 16px;border:1px solid rgba(255,255,255,.75);border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font:400 11px var(--one);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.dys[hidden]{display:none}
+.nav{position:fixed;z-index:6;left:50%;bottom:30px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:calc(100vw - 24px);padding:5px;border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font:400 11px var(--one);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.nav[hidden]{display:none}
+.nav button{appearance:none;flex:none;width:34px;height:34px;margin:0;padding:0 0 3px;border:0;border-radius:50%;background:#fff;color:#000;font:700 20px/1 var(--one);cursor:pointer}
+.nav button:hover,.nav button:focus-visible{background:#a9d4ff;outline:none}
+.nav span{overflow:hidden;text-overflow:ellipsis}
+.nav small{color:var(--soft);font-size:10px;letter-spacing:.08em}
+.nav .x{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);font-size:18px}
+.nav .x:hover,.nav .x:focus-visible{background:#fff;color:#000}
+@media (max-width:560px){.nav small{display:none}}
+.dys button{appearance:none;margin:0;padding:6px 14px;border:0;border-radius:999px;background:#fff;color:#000;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+.dys button:hover,.dys button:focus-visible{background:#a9d4ff;outline:none}
+.rail button{appearance:none;position:relative;display:block;flex:none;width:100%;height:9px;margin:0;padding:0;border:0;background:none;cursor:pointer}
+.rail button:focus-visible{outline:none}
+.rail i{position:absolute;right:0;top:50%;width:12px;height:1px;margin-top:-.5px;background:rgba(255,255,255,.5);transform-origin:100% 50%;transition:background .2s,opacity .2s;will-change:transform}
+.rail .yr{height:14px}
+.rail .yr i{width:22px;height:1.5px;background:#fff}
+.rail .yr span{position:absolute;right:30px;top:50%;margin-top:-7px;line-height:14px;font-size:11px;font-weight:700;letter-spacing:.04em;color:#fff;transform-origin:100% 50%;will-change:transform}
+.rail .off i{opacity:.22}
+.rail .off span{opacity:.4}
+.rail .sel i{background:#a9d4ff;opacity:1}
+.sight .gh{position:absolute;left:-150px;top:92px;display:block;width:300px;text-align:center;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#fff;opacity:0;white-space:nowrap}
+.an-pal b{position:absolute;left:0;top:100%;margin-top:4px;font-weight:400;font-size:9.5px;letter-spacing:.06em;color:var(--soft)}
+.an-g{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:end;height:38px;margin:28px 0 14px}
+.an-hue,.an-lum{display:flex;align-items:flex-end;height:100%}
+.an-hue{gap:2px}
+.an-hue i{width:6px}
+.an-lum{gap:1px}
+.an-lum i{flex:1;background:rgba(255,255,255,.55)}
+.an-dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.an-dl dt{color:var(--soft)}
+.an-dl dd{margin:0;text-align:right;color:#fff;white-space:nowrap}
+.sight p{position:absolute;left:96px;top:-62px;margin:0;padding-left:12px;border-left:1px solid rgba(255,255,255,.34);white-space:nowrap;font-size:10.5px;line-height:1.55;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);font-variant-numeric:tabular-nums}
+.sight p b{display:block;font-weight:400;font-size:12.5px;color:#fff}
+
+/* ---------- le texte, posé comme sur l'accueil ---------- */
+.ui{position:fixed;inset:0;z-index:5;display:grid;grid-template-rows:auto minmax(0,1fr);padding:0 var(--gut) 20px;pointer-events:none}
+.ui[hidden]{display:none}
+.top{position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;height:54px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink)}
+.top b{font-size:15px;font-weight:700;letter-spacing:0;text-transform:none;color:#fff}
+.top .mid{position:absolute;left:50%;transform:translateX(-50%);color:var(--soft);white-space:nowrap}
+.snd{appearance:none;pointer-events:auto;padding:7px 14px;border:1px solid rgba(255,255,255,.75);border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font:400 11px var(--one);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+.snd:hover,.snd:focus-visible{background:#fff;color:#000;outline:none}
+.snd[hidden]{display:none}
+.form{position:absolute;right:var(--gut);top:70px;margin:0;display:flex;flex-direction:column;gap:3px;text-align:right;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);font-variant-numeric:tabular-nums}
+.form b{margin-bottom:4px;font-weight:400;font-size:12.5px;color:#fff}
+.form b::before{content:"";display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:currentColor;vertical-align:1px;animation:blink 1.4s steps(2,start) infinite}
+@keyframes blink{to{opacity:0}}
+.main{align-self:end;min-width:0;padding:24px 0 clamp(20px,4vh,44px)}
+.k{margin:0 0 14px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ion)}
+.name{margin:0 0 0 -.04em;font-weight:700;font-size:clamp(40px,min(9.4vw,19vh),158px);line-height:.88;letter-spacing:-.055em;color:#fff;white-space:nowrap;mix-blend-mode:difference}
+.line{margin:clamp(14px,2.2vh,24px) 0 clamp(14px,2.4vh,24px);font-size:clamp(20px,2.5vw,36px);line-height:1.1;letter-spacing:-.02em}
+.gest{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
+.gest b{display:inline-block;min-width:74px;font-weight:400;letter-spacing:.22em;color:#fff}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;height:2px;background:rgba(255,255,255,.1)}
+.bar i{display:block;height:100%;background:#fff;transform:scaleX(0);transform-origin:0 50%;will-change:transform}
+/* avant d'entrer : une fiche qui montre les gestes, comme les réglages du pavé tactile */
+.guide{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.guide[hidden]{display:none}
+.g-card{width:min(780px,100%);padding:clamp(22px,3.4vw,40px);border:1px solid rgba(255,255,255,.2);border-radius:22px;background:rgba(16,18,22,.84);box-shadow:0 40px 120px rgba(0,0,0,.6)}
+.g-card h2{margin:0 0 26px;font-weight:700;font-size:clamp(26px,3.3vw,42px);line-height:1;letter-spacing:-.045em}
+.g-row{list-style:none;margin:0 0 28px;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.g-row li{display:grid;gap:12px;align-content:start;font-size:13px;line-height:1.35;color:var(--ink)}
+.g-row b{display:block;margin-bottom:2px;font-weight:700;color:#fff}
+.pad{position:relative;aspect-ratio:4/3;border:1px solid rgba(255,255,255,.34);border-radius:14px;background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.02));overflow:hidden}
+.pad i{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#fff;will-change:transform,opacity}
+.g-ok{appearance:none;border:1.5px solid #fff;border-radius:999px;background:#fff;color:#000;padding:13px 28px;font:700 14px var(--one);letter-spacing:.01em;cursor:pointer}
+.g-ok:hover,.g-ok:focus-visible{background:transparent;color:#fff;outline:none}
+@media (max-width:700px){.g-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fail{position:fixed;left:50%;top:50%;z-index:9;max-width:34ch;margin:0;transform:translate(-50%,-50%);text-align:center;font-size:15px;line-height:1.4;color:var(--ink)}
+.fail[hidden]{display:none}
+
+@media (max-width:860px){
+  .top .mid{display:none}
+  .form{top:62px;font-size:9.5px}
+  .form span:nth-child(n+5){display:none}
+  .main{padding:18px 0 14px}
+  .k{margin-bottom:10px;font-size:11px}
+  .line{margin:10px 0 14px;font-size:19px}
+  .gest{font-size:9.5px}
+  .gest b{min-width:72px}
+  .sight i{left:-55px;top:-55px;width:110px;height:110px}
+  .an{left:var(--gut);right:auto;top:66px;width:176px}
+  .an-y{font-size:34px}
+  .an-g,.an-dl{display:none}
+  .sight p{left:70px;top:-48px;font-size:9.5px}
+  .rail{display:none}
+  .an{left:var(--gut);right:auto}
+  .sight .gh{top:70px}
+}
+@media (prefers-reduced-motion:reduce){.form b::before{animation:none}}
+</style>
+</head>
+<body>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+<img id="hd" alt="" aria-hidden="true">
+<canvas id="hud" aria-hidden="true"></canvas>
+<div class="sight" id="sight" aria-hidden="true"><i></i><span class="gh" id="gh"></span></div>
+<aside class="an" id="an" aria-hidden="true">
+  <p class="an-y" id="anY"></p>
+  <p class="an-n" id="anN"></p>
+  <p class="an-f" id="anF"></p>
+  <div class="an-ui hit" id="anUi">
+    <div class="an-pal" id="anPal"></div>
+    <div class="an-fl" id="anFl" hidden></div>
+  </div>
+  <div class="an-g"><div class="an-hue" id="anHue"></div><div class="an-lum" id="anLum"></div></div>
+  <dl class="an-dl" id="anDl"></dl>
+</aside>
+<nav class="rail hit" id="rail" aria-label="Années" hidden></nav>
+<div class="dys hit" id="dys" hidden><span id="dysT"></span><button type="button" id="dysX">Sortir</button></div>
+<div class="nav hit" id="nav" hidden><button type="button" id="navP" aria-label="Photo précédente">‹</button><span id="navT"></span><small id="navH"></small><button type="button" id="navN" aria-label="Photo suivante">›</button><button type="button" id="navX" class="x" aria-label="Fermer la photo">×</button></div>
+
+<div class="ui" id="ui">
+  <header class="top">
+    <b>Studio Visions</b>
+    <span class="mid">(SV® Lab v7)</span>
+    <button class="snd" id="snd" type="button" hidden>Couper le son</button>
+  </header>
+  <p class="form" aria-live="off">
+    <b>Dyson</b>
+    <span id="rPts">0 particules</span>
+    <span id="rImg">0 souvenirs</span>
+    <span id="rMass">Perturbation 0 %</span>
+    <span id="rProg">Boucle 0 %</span>
+    <span id="rLoop">Durée 48 s</span>
+    <span id="rFps">Images / s 60</span>
+  </p>
+  <div class="main">
+    <p class="k">Lab v7 · effet isolé</p>
+    <h1 class="name">Dyson</h1>
+    <p class="line">Ma mémoire, sur tous ses axes.</p>
+    <ul class="gest" id="gest"></ul>
+  </div>
+</div>
+
+<div class="bar" id="bar" aria-hidden="true"><i id="prog"></i></div>
+<div class="guide" id="guide" hidden>
+  <div class="g-card" role="dialog" aria-modal="true" aria-labelledby="gT">
+    <p class="k">Avant d'entrer</p>
+    <h2 id="gT">Cet écran réagit à tes doigts.</h2>
+    <ul class="g-row" id="gRow"></ul>
+    <button class="g-ok" id="gOk" type="button">C'est compris</button>
+  </div>
+</div>
+<p class="fail" id="local" hidden>Ouvert directement, le navigateur bloque tes photos : tout reste gris.<br>Double-clique plutôt sur <b>METTRE À JOUR.command</b>, dans le dossier SINGULARITE du bureau.</p>
+<p class="fail" id="fail" hidden>La scène 3D n'a pas pu démarrer. Elle a besoin d'une connexion (Three.js) et d'un navigateur avec WebGL.</p>
+
+<!-- GSAP 3.15.1, licence gratuite de GreenSock (gsap.com/standard-license) ; Three.js 0.187.0, licence MIT -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.min.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+} }
+</script>
+<script>setTimeout(function () { if (!window.LAB) document.getElementById("fail").hidden = false; }, 6000);</script>
+<script type="module">
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const C = CONFIG;
+const $ = (s) => document.querySelector(s);
+const TAU = Math.PI * 2, RAD = Math.PI / 180;
+const clamp = gsap.utils.clamp;
+const two = (n) => String(n).padStart(2, "0");
+const fr = (n, d) => (d === undefined ? String(n) : n.toFixed(d)).replace(".", ",");
+const touchUI = matchMedia("(pointer:coarse)").matches && !matchMedia("(any-pointer:fine)").matches;   // tactile seul, sans souris ni pavé
+const phone = matchMedia("(max-width:860px)").matches || (touchUI && Math.min(screen.width, screen.height) < 900);   // petit écran : scène allégée
+const LOOK = new URLSearchParams(location.search).get("look") || C.look;     // ?look=dense ou ?look=couleur : pour comparer les deux rendus
+const lite = phone || LOOK === "couleur";                                   // rendu « couleur » : moins de points, plus gros, sans halo, comme sur téléphone
+const DENS0 = lite ? C.densityPhone : C.density, DENS = DENS0;
+const UNIT = C.plateHeight / DENS;                               // écart entre deux points d'un visuel
+const CYC = Math.max(1, Math.round(C.flowCycles));
+
+/* tirage au sort toujours identique : la scène est la même à chaque chargement */
+function rnd(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const R = rnd(97);
+
+/* ---------- images : assets/ et ses sous-dossiers « AAAA Nom du dossier » ---------- */
+const load = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+const isImg = /\.(jpe?g|png|webp|avif)$/i;
+async function list(dir) {                                         // la liste d'un dossier, telle que le serveur la donne
+  try {
+    const r = await fetch(dir, { cache: "no-store" });
+    if (!r.ok) return [];
+    const doc = new DOMParser().parseFromString(await r.text(), "text/html");
+    return Array.from(doc.querySelectorAll("a[href]"), (a) => decodeURIComponent(a.getAttribute("href"))).filter((h) => h[0] !== "." && h[0] !== "_" && h[0] !== "/" && h[0] !== "?" && h.indexOf("..") < 0);   // « _dossier » : mis de côté
+  } catch (e) { return []; }
+}
+function meta(folder, file) {                                      // l'année se lit au début du nom du dossier, sinon au début du nom du fichier
+  const base = file.replace(/\.[^.]+$/, ""), rx = /^((?:19|20)\d\d)[\s_.\-]*(.*)$/, mf = rx.exec(folder || ""), mb = rx.exec(base);
+  const name = ((folder ? (mf ? mf[2] : folder) : "") || (mb ? mb[2] : base) || base).replace(/[_\-]+/g, " ").trim() || base;
+  return { year: mf ? +mf[1] : mb ? +mb[1] : null, name, file };
+}
+async function findImages() {
+  const dir = "assets/", out = [];
+  if (C.images && C.images.length) C.images.forEach((n) => out.push({ path: n, ...meta(n.indexOf("/") > 0 ? n.split("/")[0] : "", n.split("/").pop()) }));
+  else if (location.protocol.indexOf("http") === 0) {
+    const top = await list(dir), loose = [];
+    for (const h of top) {
+      if (h.endsWith("/")) {
+        const f = h.slice(0, -1), inside = await list(dir + encodeURIComponent(f) + "/");
+        let note = "";                                               // infos.txt dans le dossier : sa première ligne s'affiche sous le nom
+        if (inside.indexOf("infos.txt") >= 0) { try { note = ((await (await fetch(dir + encodeURIComponent(f) + "/infos.txt", { cache: "no-store" })).text()).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || "").slice(0, 90); } catch (e) { note = ""; } }
+        inside.filter((x) => isImg.test(x)).sort().forEach((x) => out.push({ path: f + "/" + x, note, ...meta(f, x) }));
+      }
+      else if (isImg.test(h)) loose.push({ path: h, ...meta("", h) });
+    }
+    if (!out.length) out.push(...loose);                           // des sous-dossiers existent : les images posées à côté sont ignorées
+  }
+  const ims = await Promise.all(out.map((o) => load(dir + o.path.split("/").map(encodeURIComponent).join("/"))));
+  return out.map((o, i) => ({ ...o, im: ims[i] })).filter((o) => o.im).sort((a, b) => (a.year || 9999) - (b.year || 9999) || a.name.localeCompare(b.name));
+}
+
+/* un visuel devient une grille de points : position, couleur, et luminosité pour le relief */
+function sample(img, dens) {
+  const DENS = dens || DENS0;
+  const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true });
+  let w, h;
+  if (img) {
+    const ar = img.naturalWidth / img.naturalHeight;
+    if (ar >= 1) { w = DENS; h = Math.max(2, Math.round(DENS / ar)); } else { h = DENS; w = Math.max(2, Math.round(DENS * ar)); }
+    cv.width = w; cv.height = h; cx.drawImage(img, 0, 0, w, h);
+  } else {                                                         // aplat de secours : un gris froid, sans numéro
+    h = DENS; w = Math.round(DENS * .8); cv.width = w; cv.height = h;
+    const g = cx.createLinearGradient(0, 0, w, h); g.addColorStop(0, "#3a4656"); g.addColorStop(1, "#141a22");
+    cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+  }
+  return { d: cx.getImageData(0, 0, w, h).data, w, h };
+}
+
+/* ---------- analyse des couleurs : le vocabulaire de l'outil Ghostview (teinte, lumière, température, ambiance), en plus simple ---------- */
+const FAM = ["rouge", "orange", "jaune", "vert", "cyan", "bleu", "violet", "rose"], FAMH = [0, 28, 52, 120, 180, 220, 275, 325];
+const fam = (h) => (h < 15 || h >= 345 ? 0 : h < 42 ? 1 : h < 70 ? 2 : h < 165 ? 3 : h < 200 ? 4 : h < 255 ? 5 : h < 300 ? 6 : 7);
+function analyse(s) {
+  const d = s.d, n = s.w * s.h, hue = new Float32Array(8), hist = new Float32Array(16), bins = new Map();
+  let sL = 0, sC = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = mx - mn, l = .2126 * r + .7152 * g + .0722 * b;
+    let h = 0;
+    if (c > .0001) { h = mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4; h = (h * 60 + 360) % 360; }
+    sL += l; sC += c;
+    hist[Math.min(15, Math.floor(l * 16))]++;
+    if (c > .12 && mx > .15) hue[fam(h)] += c;
+    /* palette : chaque pixel va dans une case (teinte et clarté) ; les cinq cases les plus pleines font la palette */
+    const key = c < .1 ? 100 + Math.min(3, Math.floor(l * 4)) : fam(h) * 4 + Math.min(3, Math.floor(mx * 4));
+    let q = bins.get(key);
+    if (!q) { q = [0, 0, 0, 0]; bins.set(key, q); }
+    q[0]++; q[1] += r; q[2] += g; q[3] += b;
+  }
+  const pal = Array.from(bins.values()).sort((a, b) => b[0] - a[0]).slice(0, 5).map((q) => ({ share: q[0] / n, rgb: [q[1] / q[0], q[2] / q[0], q[3] / q[0]] }));
+  const tot = Math.max(1e-9, hue.reduce((a, v) => a + v, 0)), part = Array.from(hue, (v) => v / tot);
+  const L = sL / n, Cm = sC / n, warm = part[0] + part[1] + part[2] + .5 * part[7], cold = part[4] + part[5] + .5 * part[6] + .3 * part[3];
+  const neutral = Cm < .06 || tot < n * .004, dom = part.indexOf(Math.max(...part)), hm = Math.max(...hist);
+  return {
+    pal, part: neutral ? part.map(() => 0) : part, L, C: Cm, hist: Array.from(hist, (v) => v / hm),
+    tint: neutral ? "neutre" : FAM[dom],
+    lum: L < .3 ? "sombre" : L > .62 ? "claire" : "moyenne",
+    temp: neutral ? "neutre" : warm > cold * 1.3 ? "chaude" : cold > warm * 1.3 ? "froide" : "neutre",
+    amb: neutral ? "Noir et blanc" : L < .3 ? (warm >= cold ? "Sombre chaud" : "Sombre froid") : L > .62 && Cm < .12 ? "Lumineux épuré" : dom < 3 ? "Chaud rouge or" : dom === 3 ? "Vert nature" : dom < 6 ? "Froid bleu cyan" : "Rose violet"
+  };
+}
+
+const pos = [], col = [], seed = [], orb = [], orb2 = [], kind = [], pidx = [];
+let pushIdx = -1;                                                  // le souvenir auquel appartiennent les points qu'on ajoute
+const push = (k, x, y, z, r, g, b, s0, s1, s2, s3, o0, o1, o2, o3, o4, o5, o6) => { pos.push(x, y, z); col.push(r, g, b); seed.push(s0, s1, s2, s3); orb.push(o0, o1, o2, o3); orb2.push(o4 || 0, o5 || 0, o6 || 0, 0); kind.push(k); pidx.push(pushIdx); };
+const plates = [];
+
+function buildPlates(list) {
+  const items = list.length ? list : Array.from({ length: 9 }, () => ({ im: null, year: null, name: "Aplat", file: "" }));
+  const years = Array.from(new Set(items.map((o) => o.year).filter(Boolean))).sort((a, b) => a - b);
+  const N = items.length, frac = (x) => x - Math.floor(x), byYear = new Map();
+  items.forEach((o, i) => { const k = o.year || 0; if (!byYear.has(k)) byYear.set(k, []); byYear.get(k).push(i); });
+  const budget = Math.floor((lite ? C.maxPointsPhone : C.maxPoints) / N);
+  let n = 0, tainted = false;
+  items.forEach((it, i) => {
+    /* plus un souvenir est ancien, plus son orbite est lointaine et allongée ; chacun a son propre plan, son propre nœud */
+    let age;                                                         // 0 : le plus récent ; 1 : le plus ancien
+    if (years.length > 1) {
+      const yi = it.year ? years.indexOf(it.year) : years.length - 1, grp = byYear.get(it.year || 0), j = grp.indexOf(i), band = 1 / (years.length - 1);
+      age = clamp(0, 1, 1 - (yi + (grp.length > 1 ? (j / (grp.length - 1) - .5) * .5 : 0)) * band);   // une année = une bande, où chacun a sa place
+    } else age = N > 1 ? 1 - i / (N - 1) : .5;                       // une seule année connue : l'ordre des fichiers
+    const a = C.orbitNear + (C.orbitFar - C.orbitNear) * age, ecc = C.eccNear + (C.eccFar - C.eccNear) * Math.pow(age, 1.15);
+    const inc = (C.tiltMin + (C.tiltMax - C.tiltMin) * Math.pow(frac(i * .6180339887 + .13), .8)) * RAD * (frac(i * .7548776662 + .3) < .5 ? -1 : 1);
+    const node = frac(i * .5698402909 + .07) * TAU, om = frac(i * .3819660113 + .55) * TAU, M0 = frac(i * .2360679775 + .21) * TAU;
+    const turns = (age < .5 ? 2 : 1) * (frac(i * .4142135624 + .6) < .3 ? -1 : 1);
+    let s;
+    try { s = sample(tainted ? null : it.im); } catch (err) { tainted = true; s = sample(null); }   // image illisible sans serveur
+    const P = { R: a, e: ecc, tilt: inc, node, om, phase: M0, turns, age, w: s.w * UNIT, h: s.h * UNIT, n: n++, year: it.year, name: it.name, file: it.file, note: it.note || "", im: tainted ? null : it.im, an: analyse(s), count: 0 };
+    if (P.an.L < .012) { n--; return; }                              // image entièrement noire : rien à montrer
+    plates.push(P);
+    P.ring = new Float32Array(98);                                   // son orbite vue du dessus, pour la carte orbitale
+    { const t0 = new THREE.Vector3(); for (let k = 0; k <= 48; k++) { kep(P, k / 48 * TAU, t0); P.ring[2 * k] = t0.x; P.ring[2 * k + 1] = t0.z; } }
+    pushIdx = P.n;
+    const keepers = [];
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
+      const i2 = (y * s.w + x) * 4, r = s.d[i2] / 255, g = s.d[i2 + 1] / 255, b = s.d[i2 + 2] / 255, l = .2126 * r + .7152 * g + .0722 * b;
+      if (l > .045 || R() < .03) keepers.push(x, y, r, g, b, l);
+    }
+    const ratio = Math.min(1, budget / (keepers.length / 6));
+    for (let q = 0; q < keepers.length; q += 6) {
+      if (ratio < 1 && R() > ratio) continue;
+      P.count++;
+      push(0, (keepers[q] - s.w / 2 + .5 + (R() - .5) * .5) * UNIT, (s.h / 2 - keepers[q + 1] - .5 + (R() - .5) * .5) * UNIT, keepers[q + 5],
+        keepers[q + 2], keepers[q + 3], keepers[q + 4], R(), R(), R(), R(), P.R, P.phase, P.tilt, P.turns, P.e, P.node, P.om);
+    }
+  });
+  G.years = years; G.orbR = [Math.max.apply(null, plates.map((P) => P.R * (1 + P.e)))];
+  return tainted;
+}
+
+function buildSpace() {
+  pushIdx = -1;
+  const discN = Math.round(C.discParticles / (lite ? 2.5 : 1)), cometN = Math.round(C.comets / (lite ? 2 : 1)), tail = Math.round(C.cometTail / (lite ? 1.6 : 1)), stars = Math.round(C.stars / (lite ? 2.5 : 1));
+  for (let i = 0; i < discN; i++) {                                // disque : plus dense et plus rapide vers l'intérieur
+    const halo = R() < .22 ? 1 : 0;
+    const r = halo ? C.holeRadius * (1.28 + Math.pow(R(), 2) * .95) : C.discInner + (C.discOuter - C.discInner) * Math.pow(R(), 1.6);
+    const turns = Math.max(1, Math.round(8 * Math.pow(C.discInner / Math.max(C.discInner, r), 1.5)));
+    push(1, r, R() * TAU, (R() - .5) * .07 * r, 1, 1, 1, R(), R(), R(), R(), halo ? Math.max(2, turns) : turns, halo, 0, 0);
+  }
+  for (let c = 0; c < cometN; c++) {                               // comètes : orbites allongées, une tête et une queue
+    const a = 2.6 + R() * 4.2, e = .25 + R() * .5, incl = (R() - .5) * 1.2, node = R() * TAU, turns = (1 + Math.floor(R() * 3)) * (R() < .5 ? -1 : 1), ph = R() * TAU;
+    for (let j = 0; j < tail; j++) push(2, j / tail, R() - .5, R() - .5, 1, 1, 1, incl, node, R(), R(), a, e, turns, ph);
+  }
+  for (let i = 0; i < stars; i++) {                                // étoiles lointaines
+    const u = R() * 2 - 1, t = R() * TAU, s = Math.sqrt(1 - u * u), d = 28 + R() * 40;
+    push(3, Math.cos(t) * s * d, u * d, Math.sin(t) * s * d, 1, 1, 1, R(), R(), R(), R(), 0, 0, 0, 0);
+  }
+}
+
+/* ---------- les deux programmes de la carte graphique ---------- */
+const VERT = /* glsl */ `
+uniform float uT, uMass, uPulse, uReach, uPull, uLift, uGrow, uCore, uRelief, uFlow, uCyc, uScale, uTan, uAspect, uIntro, uUnit, uDiscIn, uDiscOut, uRoll, uBright;
+uniform vec2 uMouse, uVel;
+uniform float uMatch[64];
+uniform float uFilt;
+uniform vec4 uImp;
+uniform vec3 uImpW;
+uniform float uAgit, uClock, uMaxPt, uOrb, uReadFar, uReadNear, uUnitHi;
+uniform mat3 uGyro;
+uniform float uSwell, uNuc, uTidal;
+uniform vec4 uFocus;
+uniform float uHd, uThru, uPz;
+uniform vec2 uPan;
+uniform vec3 uShow;
+attribute vec3 aCol;
+attribute vec4 aSeed;
+attribute vec4 aOrb;
+attribute vec4 aOrb2;
+attribute float aKind;
+attribute float aIdx;
+varying vec3 vCol;
+varying float vA;
+const float TAU = 6.28318530718;
+
+vec3 rotX(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c); }
+vec3 rotY(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c + p.z * s, p.y, p.z * c - p.x * s); }
+vec3 rotZ(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z); }
+/* l'orbite propre d'un souvenir : une ellipse (demi-grand axe a, excentricité e), dans son plan (inclinaison inc, nœud node, périastre om) */
+vec3 kepler(float a, float e, float M, float inc, float node, float om) {
+  float E = M + e * sin(M);
+  for (int i = 0; i < 5; i++) E -= (E - e * sin(E) - M) / (1. - e * cos(E));
+  vec3 q = vec3(a * (cos(E) - e), 0., a * sqrt(1. - e * e) * sin(E));
+  return rotY(rotX(rotY(q, om), inc), node);
+}
+
+void main() {
+  vec3 P = vec3(0.);
+  vec3 c = vec3(1.);
+  float size = .02, nearK = 0., lift = 0., travel = 0., holdK = 0., fadeK = 1., thruK = 0., impK = 0.;
+  vec2 shift = vec2(0.);
+  float mass = min(uMass, 1.);
+  float reach = uReach * (1. + .35 * max(uMass - 1., 0.));
+
+  if (aKind < .5) {
+    /* ----- un point d'une photo ----- */
+    float hi = step(.1, aKind);                                                    // 1 : point de la version fine, celle qu'on lit
+    float mtch = aIdx < -.5 || aIdx > 63.5 ? 1. : uMatch[int(aIdx + .5)];          // 1 : ce souvenir répond au filtre (couleur, année)
+    float aM = aOrb.y + uT * aOrb.w * TAU;
+    vec3 C0 = uGyro * (kepler(aOrb.x, aOrb2.x, aM, aOrb.z, aOrb2.y, aOrb2.z) * (1. + uSwell));   // centre de la photo, sur son orbite propre
+    vec4 cv = viewMatrix * vec4(C0, 1.);
+    vec2 mv = uMouse * (-cv.z) * uTan * vec2(uAspect, 1.);                        // la souris, ramenée à la profondeur de la photo
+    nearK = mass * smoothstep(reach, reach * .12, length(mv - cv.xy));            // 1 : la souris est dessus
+    float mine = step(abs(aOrb.x - uFocus.x) + abs(aOrb.y - uFocus.y), .0005);   // est-ce la photo visée ou choisie ?
+    holdK = mine * uFocus.z;                                                       // 1 : elle est présentée devant toi
+    nearK *= 1. - uFocus.z * (1. - mine);                                          // pendant ce temps, les autres restent fermées
+    float fine = mine * uFocus.w;                                                  // 1 : sa version fine a pris le relais
+    thruK = hi * mine * uThru;                                                     // 1 : on est passé au travers de cette photo
+    /* de loin, un objet : une sphère de points à ses couleurs, qui tourne. De près, elle s'ouvre et devient l'image */
+    float rd = max(max(smoothstep(uReadFar, uReadNear, -cv.z) * fine, nearK), holdK);   // une seule photo ouverte à la fois : celle qui est visée
+    float open = rd * rd * (3. - 2. * rd);
+    float sa = aSeed.x * TAU + uT * TAU * 3., sy = aSeed.w * 2. - 1., sr = .55 + .45 * aSeed.z;
+    vec3 orb = vec3(cos(sa) * sqrt(max(0., 1. - sy * sy)), sy, sin(sa) * sqrt(max(0., 1. - sy * sy))) * sr * uOrb * (1. + .35 * uFilt * mtch);
+    vec3 img = vec3(position.xy * (1. + uGrow * nearK + .25 * holdK) * mix(1., min(uPz, 5.), holdK), position.z * uRelief * (1. + nearK));   // agrandie avec l'image, jusqu'à cinq fois
+    /* même ouverte, l'image reste vivante : chaque point respire un peu autour de sa place */
+    img += vec3(sin(uT * TAU * 6. + aSeed.x * 40.), cos(uT * TAU * 5. + aSeed.y * 40.), sin(uT * TAU * 4. + aSeed.z * 40.)) * uUnit * .28;
+    vec3 o = mix(orb, img, open);
+    if (uImp.z > -.5 && abs(aOrb.x - uImp.x) + abs(aOrb.y - uImp.y) < .0005) {
+      /* une comète vient de percuter ce souvenir : il éclate, puis ses points reviennent à leur place */
+      impK = smoothstep(0., .05, uImp.z) * pow(1. - uImp.z, 2.2) * uImp.w;
+      vec3 dirI = normalize(vec3(o.xy + (aSeed.xy - .5) * .45, (aSeed.z - .5) * 1.3) + vec3(0., 0., .0001));
+      o += dirI * impK * (1.1 + 1.6 * aSeed.w);
+    }
+    /* la photo fait toujours face à la caméra, même quand on tourne autour : ses points sont posés dans le repère de la vue */
+    vec3 off = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]) * o.x + vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]) * o.y + vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]) * o.z;
+    float tid = uTidal * smoothstep(3.5, 1.5, length(C0)) * (1. - open) * (1. - holdK);   // frôler le noyau : le souvenir s'étire vers lui
+    vec3 radl = C0 / (length(C0) + .0001);
+    off += radl * dot(off, radl) * 1.5 * tid;
+    vec3 home = C0 + off;
+    /* une partie des points part en spirale vers le disque, puis revient par l'autre côté */
+    float u = fract(uT * uCyc + aSeed.x);
+    float go = step(aSeed.y, uFlow) * (1. - nearK) * (1. - holdK) * (1. - hi);
+    float k = go * smoothstep(.04, .42, u) * (1. - smoothstep(.58, .96, u));
+    travel = k * k * (3. - 2. * k);
+    vec3 hl = home * uGyro;                                                         // le même point, dans le repère propre de la galaxie (celui du disque)
+    float rh = length(hl.xz), th = atan(hl.z, hl.x);
+    float r = mix(rh, mix(uDiscIn, uDiscOut, aSeed.z), travel);
+    float ang = th + (u < .5 ? 1. : -1.) * travel * TAU * (1. + floor(aSeed.w * 2.));
+    P = uGyro * vec3(cos(ang) * r, mix(hl.y, (aSeed.w - .5) * .12, travel), sin(ang) * r);
+    float ratio = 2.0 * (.6 + position.z * .7) * (1. + nearK * .3) * mix(.7, 1., open) * mix(1., .8, hi);   // diamètre du point, en écarts de grille
+    /* les points se recouvrent : on divise la lumière par le recouvrement, pour que l'image garde ses vraies valeurs */
+    c = pow(aCol, vec3(2.2)) * uBright * (4.25 / (ratio * ratio)) * (1. + nearK * .5) / (.72 + 1.15 * position.z);
+    c *= 1. + tid * .9;                                                            // et s'illumine
+    c *= mix(.16, 1., open);                                                       // fermé, l'objet est dense : on retient sa lumière
+    c = mix(c, vec3(.72, .86, 1.) * (.22 + .5 * aSeed.z), travel * .88);          // en route : une poussière froide
+    size = mix(uUnit, uUnitHi, hi) * ratio * mix(1., .45, travel);
+    float outF = uFilt * (1. - mtch);                                             // filtre : hors du choix, le souvenir s'éteint
+    c *= (1. - .9 * outF) * (1. + .15 * uFilt * mtch) * (1. + impK * 1.8);
+    size *= 1. - .45 * outF;
+    fadeK = mix(1. - fine, fine, hi) * (1. - mine * uHd);                         // la version fine remplace l'autre ; en HD, les points s'effacent et l'image reste seule
+    shift = (mv - cv.xy) * nearK * uPull * (1. - holdK) + (uShow.xy - cv.xy + uPan) * holdK;   // glisse vers la souris, ou vient se présenter
+    lift = nearK * uLift * (1. - holdK) + (uShow.z - cv.z) * holdK;
+  } else if (aKind < 1.5) {
+    /* ----- disque d'accrétion, et l'anneau de lumière courbée autour du trou ----- */
+    float a = position.y + uT * aOrb.x * TAU;
+    float r = position.x;
+    float heat = 1. - smoothstep(uDiscIn, uDiscOut, r);
+    if (aOrb.y > .5) {                                                            // l'anneau de lumière courbée fait toujours face à la caméra
+      vec3 rx = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), ry = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]), rz = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+      P = (rx * cos(a) + ry * sin(a)) * r * (1. + .1 * uNuc) + rz * position.z * .4; heat = .9;
+    } else {
+      a += uNuc * 2.4 * heat * heat;                                              // sous la souris, le disque se tord en spirale
+      P = uGyro * vec3(cos(a) * r, position.z, sin(a) * r);
+    }
+    c = mix(vec3(.5, .72, 1.), vec3(1.), heat) * (.03 + heat * .15) * (1. + .55 * sin(a)) * (1. + .9 * uNuc);
+    size = .010 + heat * .012;
+  } else if (aKind < 2.5) {
+    /* ----- comète : une tête, et une queue qui s'élargit ----- */
+    float j = position.x;
+    float nu = aOrb.w + (uT * aOrb.z - j * .085 * sign(aOrb.z)) * TAU;
+    float r = aOrb.x * (1. - aOrb.y * aOrb.y) / (1. + aOrb.y * cos(nu));
+    P = vec3(cos(nu) * r, 0., sin(nu) * r) + vec3(position.y, position.z, position.y * .5) * j * .22;
+    P = uGyro * (rotY(rotX(P, aSeed.x), aSeed.y) * (1. + uSwell * .8));
+    c = vec3(.78, .9, 1.) * (1. - j) * (1. - j) * 1.5;
+    size = mix(.04, .01, j);
+  } else {
+    /* ----- étoile lointaine ----- */
+    P = position;
+    c = vec3(.8, .86, 1.) * (.2 + aSeed.z * .5) * (.6 + .4 * sin(uT * TAU * floor(1. + aSeed.x * 4.) + aSeed.y * TAU));
+    size = .1 + aSeed.w * .12;
+  }
+
+  if (uImp.z > -.5 && aKind < 2.5) {
+    /* l'onde de choc de l'impact traverse les voisins */
+    vec3 dI = P - uImpW; float dl = length(dI) + .0001;
+    float bandI = exp(-pow((dl - uImp.z * 7.) / .55, 2.)) * (1. - uImp.z) * uImp.w;
+    P += dI / dl * bandI * .55;
+    c *= 1. + bandI * 1.4;
+  }
+  vec4 pv = viewMatrix * vec4(P, 1.);
+  pv.xy += shift;
+  pv.z += lift;
+  if (thruK > .001) {
+    /* on traverse la photo : ses points se déploient en profondeur, du lointain jusque derrière toi, et tu passes au milieu */
+    float tk = thruK * thruK * (3. - 2. * thruK);
+    pv.xy *= 1. + tk * .5 * aSeed.x;
+    pv.xy += vec2(sin(uT * TAU * 5. + aSeed.w * 40.), cos(uT * TAU * 4. + aSeed.x * 40.)) * .22 * tk;
+    pv.z = mix(pv.z, mix(-10., 1.6, aSeed.z), tk);
+    c *= 1. + 2.2 * tk;
+  }
+
+  if (aKind < 2.5 && uMass > .001 && holdK < .5) {
+    /* ----- la gravité de la souris, particule par particule ----- */
+    vec2 m2 = uMouse * (-pv.z) * uTan * vec2(uAspect, 1.);
+    vec2 dv = pv.xy - m2;
+    float dd = length(dv) + .0001;
+    float free = aKind < .5 ? travel : 1.;                                        // un point bien rangé dans son visuel n'est pas déformé
+    float g = min(uMass, 1.6) * .22 * free * smoothstep(reach * 1.25, 0., dd);
+    dv *= 1. - g;                                                                 // attraction douce
+    dd = length(dv) + .0001;
+    float rc = uCore * (.6 + .4 * uMass);
+    if (dd < rc) {                                                                // au plus près : un trou sombre cerclé de lumière, qui tourne
+      float t = dd / rc;
+      float rt = rc * (.45 + .55 * t * t);
+      float sw = (1. - t) * (1. - t) * 2.6 * uMass;
+      float cs = cos(sw), sn = sin(sw);
+      dv = vec2(dv.x * cs - dv.y * sn, dv.x * sn + dv.y * cs) * (mix(dd, rt, mass) / dd);
+      c *= 1. + (1. - t) * .55 * mass;
+    }
+    /* l'onde, quand tu relâches */
+    float rw = uPulse * reach * 2.4;
+    float band = exp(-pow((length(dv) - rw) / .38, 2.)) * (1. - uPulse) * step(.0001, uPulse);
+    dv += normalize(dv) * band * 1.1;
+    pv.z += band * .7;
+    pv.xy = m2 + dv + uVel * smoothstep(reach, 0., dd) * .22 * free;              // le sillage du geste
+  }
+
+  if (uAgit > .001 && aKind < 2.5) {
+    /* clic maintenu : la mémoire se trouble. Chaque particule tremble, plus fort près de la souris */
+    vec2 mq = uMouse * (-pv.z) * uTan * vec2(uAspect, 1.);
+    float fall = .22 + .78 * smoothstep(reach * 2.6, 0., length(pv.xy - mq));
+    vec3 q = P * 7.3 + aSeed.xyz * 40.;
+    vec3 nz = vec3(sin(q.y + uClock * 13.) + sin(q.z * 1.7 - uClock * 7.), sin(q.z + uClock * 11.) + sin(q.x * 1.3 + uClock * 9.), sin(q.x + uClock * 8.));
+    pv.xyz += nz * uAgit * fall * .15;
+  }
+
+  gl_Position = projectionMatrix * pv;
+  gl_PointSize = clamp(size * uScale / max(.2, -pv.z), 1., mix(uMaxPt, uMaxPt * .3, thruK));   // un point trop gros coûte cher : on le plafonne
+  if (fadeK < .004) gl_Position = vec4(2., 2., 2., 1.);                       // un point effacé n'est pas dessiné du tout
+  vCol = c;
+  vA = uIntro * fadeK;
+}`;
+
+const FRAG = /* glsl */ `
+varying vec3 vCol;
+varying float vA;
+void main() {
+  vec2 q = gl_PointCoord - .5;
+  float a = smoothstep(1., 0., dot(q, q) * 4.);
+  a *= a * vA;
+  gl_FragColor = vec4(vCol * a, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
+/* ---------- la scène ---------- */
+const canvas = $("#gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));     // densité de départ ; le régulateur la baisse si la machine peine
+renderer.setClearColor(0x000000, 1);
+const scene = new THREE.Scene();
+const FOV = 42, TAN = Math.tan(FOV / 2 * RAD);
+const cam = new THREE.PerspectiveCamera(FOV, 1, .1, 900);
+const U = {
+  uT: { value: 0 }, uMass: { value: 0 }, uPulse: { value: 0 }, uMouse: { value: new THREE.Vector2(9, 9) }, uVel: { value: new THREE.Vector2() },
+  uReach: { value: C.reach }, uPull: { value: C.pull }, uLift: { value: C.lift }, uGrow: { value: C.grow }, uCore: { value: C.core },
+  uRelief: { value: C.relief }, uFlow: { value: C.flow }, uCyc: { value: CYC }, uScale: { value: 1 }, uTan: { value: TAN }, uAspect: { value: 1 },
+  uIntro: { value: 0 }, uUnit: { value: UNIT }, uDiscIn: { value: C.discInner }, uDiscOut: { value: C.discOuter }, uRoll: { value: 0 }, uBright: { value: C.brightness }, uAgit: { value: 0 }, uClock: { value: 0 }, uMaxPt: { value: 40 }, uOrb: { value: C.orbRadius }, uReadFar: { value: 10 }, uReadNear: { value: 8 },
+  uUnitHi: { value: C.plateHeight / C.focusDensity }, uFocus: { value: new THREE.Vector4(-9, -9, 0, 0) }, uShow: { value: new THREE.Vector3(.8, .15, -5.4) }, uMatch: { value: new Float32Array(64).fill(1) }, uFilt: { value: 0 }, uImp: { value: new THREE.Vector4(-9, -9, -1, 0) }, uImpW: { value: new THREE.Vector3() },
+  uHd: { value: 0 }, uThru: { value: 0 }, uPz: { value: 1 }, uPan: { value: new THREE.Vector2() },
+  uGyro: { value: new THREE.Matrix3() }, uSwell: { value: 0 }, uNuc: { value: 0 }, uTidal: { value: C.tidal }
+};
+const hole = new THREE.Mesh(new THREE.SphereGeometry(C.holeRadius, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+scene.add(hole);                                                   // la sphère noire cache ce qui passe derrière elle
+
+const state = { p: 0 };
+const ptr = { x: 9, y: 9, tx: 9, ty: 9, px: 0, py: 0, m: 0, w: 0, zoom: 1, yaw: 0, sx: 0, sy: 0, on: false, down: false, agit: 0 };
+const G = { lastIn: performance.now(), idle: 0, uiHover: false, railP: null, dv: { k: 0, dir: new THREE.Vector3(0, 0, 1), len: 4, P: null, want: 0 }, strikeP: null, testing: false, lock: null, holdEff: 0, gauge: 0, w: 1, h: 1, vertical: false, small: false, dist: 10.6, shift: 0, total: 0, awayMean: 0, years: [], orbR: [1], gut: 44, panel: { x: 0, y: 0 }, all: null,
+  gy: { q: new THREE.Quaternion(), w: new THREE.Vector3(), drag: false, tx: 0, ty: 0, x: 0, y: 0 },   // l'orientation donnée par les doigts (q), son élan (w), l'inclinaison de l'appareil
+  nc: { hover: 0, on: false, crunch: 0, press: false, k: 0, swell: 0, x: 0, y: 0, r: 60 },                         // le noyau : survol, effondrement quand on maintient
+  M: new THREE.Matrix4(), Mt: new THREE.Matrix4(), mP: -1, t: 0 };
+let composer = null, bloomOn = false, points = null;
+const setProg = gsap.quickSetter("#prog", "scaleX");
+const sight = $("#sight"), setSight = gsap.quickSetter(sight, "css"), setRing = gsap.quickSetter("#sight i", "css");
+const v3 = new THREE.Vector3(), v3b = new THREE.Vector3(), v3c = new THREE.Vector3(), v3d = new THREE.Vector3(), prev = { x: 0, y: 0, t: 0 };
+const shown = { prog: -1, ag: -1, P: undefined, live: 0 };
+const focus = { P: null, want: null, held: null, hold: 0, fine: 0, tl: null };   // la photo visée (version fine) et la photo choisie (présentée)
+let hiPts = null, material = null, hdMesh = null, bloomPass = null;
+/* ---------- la musique de fond : elle monte doucement à l'entrée, tourne en boucle, et se coupe d'un bouton ---------- */
+const music = {
+  el: null, on: true, started: false, vol: { v: 0 },
+  init() {
+    if (!C.music) return;
+    this.on = new URLSearchParams(location.search).get("mute") !== "1";
+    const a = this.el = new Audio(C.music), btn = $("#snd");
+    a.loop = true; a.preload = "none"; a.volume = 0;                    // elle ne se télécharge qu'au moment d'entrer : les photos arrivent plus vite
+    btn.hidden = false;
+    a.addEventListener("error", () => { btn.hidden = true; this.el = null; });      // fichier absent : pas de musique, pas de bouton
+    btn.textContent = this.on ? "Couper le son" : "Activer le son";
+    btn.addEventListener("click", () => this.toggle());
+    document.addEventListener("visibilitychange", () => { if (!this.el || !this.started) return; if (document.hidden) a.pause(); else if (this.on) a.play().catch(() => {}); });
+  },
+  fade(to, d) { gsap.to(this.vol, { v: to, duration: d, ease: "power1.inOut", overwrite: true, onUpdate: () => { if (this.el) this.el.volume = clamp(0, 1, this.vol.v); } }); },
+  start() {                                                          // appelée par un vrai geste : le navigateur n'autorise pas le son avant
+    if (!this.el || this.started) return;
+    this.started = true;
+    this.el.muted = !this.on;
+    this.el.play().then(() => this.fade(C.musicVolume, C.musicFade)).catch(() => { this.started = false; });
+  },
+  toggle() {
+    this.on = !this.on;
+    $("#snd").textContent = this.on ? "Couper le son" : "Activer le son";
+    if (!this.el) return;
+    if (!this.started) { if (this.on) this.start(); return; }
+    this.el.muted = false;
+    if (this.on) { this.el.play().catch(() => {}); this.fade(C.musicVolume, 1.2); } else this.fade(0, .6);
+  }
+};
+const sw = { x: 0, o: 1, busy: false, q: 0 };                            // le passage d'une photo à l'autre : décalage et opacité de l'image
+const _q = new THREE.Quaternion(), _ax = new THREE.Vector3(), _id = new THREE.Quaternion();
+const view = { z: 1, x: 0, y: 0 };                                // la photo présentée : agrandissement et décalage, pilotés par les doigts
+const hudCv = $("#hud"), hud = hudCv.getContext("2d");
+const hdImg = $("#hd"), setHd = gsap.quickSetter(hdImg, "css"), setMain = gsap.quickSetter(".main", "opacity");
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  G.w = w; G.h = h; G.vertical = h > w * 1.1;
+  renderer.setSize(w, h, false);
+  if (composer) composer.setSize(w, h);
+  cam.aspect = w / h; cam.updateProjectionMatrix();
+  G.dist = G.vertical ? 16.7 : 11.8;
+  G.shift = G.vertical ? 0 : C.offsetX * 2 * G.dist * TAN * cam.aspect;
+  U.uAspect.value = cam.aspect;
+  U.uRoll.value = G.vertical ? Math.PI / 2 : 0;                      // écran en hauteur : tout le système pivote d'un quart de tour
+  U.uScale.value = h * renderer.getPixelRatio() / (2 * TAN);
+  U.uMaxPt.value = 26 * renderer.getPixelRatio();
+  const dpr = 1;                                                    // la couche de tracés : un pixel par point suffit pour des traits fins
+  hudCv.width = Math.round(w * dpr); hudCv.height = Math.round(h * dpr);
+  hud.setTransform(dpr, 0, 0, dpr, 0, 0);
+  G.small = w < 860;
+  G.gut = clamp(18, 44, w * .03);
+  G.panel.x = w - G.gut - 248 - 76; G.panel.y = 216;
+  U.uReadFar.value = G.dist - C.openAt + 1.3; U.uReadNear.value = G.dist - C.openAt;
+  if (focus.P) stage(focus.P);   // la photo présentée : au centre, dégagée du panneau et du titre
+}
+
+/* ---------- la version fine d'une photo : construite au moment où on la vise ---------- */
+function buildHi(P) {
+  if (!P.im || !material) return;
+  let s;
+  try { s = sample(P.im, phone ? Math.round(C.focusDensity * .6) : C.focusDensity); } catch (e) { return; }
+  const un = Math.max(P.w / s.w, P.h / s.h), a = [], cl = [], sd = [], ob = [], ob2 = [], kd = [], ix = [];
+  for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
+    const i = (y * s.w + x) * 4, r = s.d[i] / 255, g = s.d[i + 1] / 255, b = s.d[i + 2] / 255, l = .2126 * r + .7152 * g + .0722 * b;
+    if (l < .02) continue;
+    a.push((x - s.w / 2 + .5) * un, (s.h / 2 - y - .5) * un, l); cl.push(r, g, b);
+    sd.push(Math.random(), 2, Math.random(), Math.random()); ob.push(P.R, P.phase, P.tilt, P.turns); ob2.push(P.e, P.node, P.om, 0); kd.push(.25); ix.push(P.n);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+  geo.setAttribute("aCol", new THREE.Float32BufferAttribute(cl, 3));
+  geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(sd, 4));
+  geo.setAttribute("aOrb", new THREE.Float32BufferAttribute(ob, 4));
+  geo.setAttribute("aOrb2", new THREE.Float32BufferAttribute(ob2, 4));
+  geo.setAttribute("aKind", new THREE.Float32BufferAttribute(kd, 1));
+  geo.setAttribute("aIdx", new THREE.Float32BufferAttribute(ix, 1));
+  if (hiPts) { hiPts.geometry.dispose(); hiPts.geometry = geo; }
+  else { hiPts = new THREE.Points(geo, material); hiPts.frustumCulled = false; scene.add(hiPts); }
+  U.uUnitHi.value = un;
+  P.fine = a.length / 3;
+  hiPts.renderOrder = 2;
+  hdImg.src = P.im.src;                                              // la vraie image, pour le moment où on la regarde en HD
+  stage(P);
+}
+function stage(P) {                                                  // où la photo vient se présenter : au centre de la zone libre, à la taille qui la montre en entier
+  const top = 126, maxH = G.h - top - 46, maxW = G.w - G.gut * 2 - (G.small ? 0 : 292), g = 1.25;
+  const d = Math.max(3.4, P.h * g * (G.h / 2) / (TAN * maxH), P.w * g * (G.h / 2) / (TAN * maxW)), k = G.h / 2 / (d * TAN);
+  U.uShow.value.set((G.gut + maxW / 2 - G.w / 2) / k, (G.h / 2 - (top + maxH / 2)) / k, -d);
+}
+function aim(P) {                                                    // la photo visée change : l'ancienne se referme, la nouvelle s'ouvre
+  if (P === focus.want) return;
+  focus.want = P;
+  gsap.killTweensOf(focus, "fine");
+  const open = () => {
+    const Q = focus.want;
+    if (!Q) { focus.P = null; U.uFocus.value.x = -9; if (hiPts) hiPts.visible = false; return; }
+    if (Q !== focus.P) { focus.P = Q; focus.fine = 0; U.uFocus.value.x = Q.R; U.uFocus.value.y = Q.phase; buildHi(Q); }
+    if (hiPts) hiPts.visible = true;
+    gsap.to(focus, { fine: 1, duration: .55, ease: "power2.out" });
+  };
+  if (focus.P && focus.P !== P && focus.fine > .01) gsap.to(focus, { fine: 0, duration: .32, ease: "power2.in", onComplete: open });
+  else open();
+}
+function present(P, sticky) {                                        // la photo vient se présenter. sticky : elle reste tant qu'on appuie
+  if (!P) return;
+  if (focus.tl) focus.tl.kill();
+  if (focus.leave) focus.leave.kill();
+  if (focus.held !== P) { focus.hold = 0; gsap.set(view, { z: 1, x: 0, y: 0 }); }
+  focus.held = P;
+  aim(P);
+  focus.tl = gsap.timeline().to(focus, { hold: 1, duration: .8, ease: "power3.out" });
+  if (!sticky) release();
+}
+function release() {                                                 // on relâche : elle reste encore un moment, puis repart
+  if (!focus.held) return;
+  if (focus.leave) focus.leave.kill();
+  focus.leave = gsap.delayedCall(C.showTime, () => { if (view.z > 1.05 || ptr.down) release(); else dismiss(); });   // tant qu'on la regarde de près, elle reste
+}
+function stay() { if (focus.leave) focus.leave.restart(true); }      // un geste sur la photo : le délai repart
+function dismiss() {                                                 // elle repart sur son orbite, dans le mouvement
+  if (focus.leave) focus.leave.kill();
+  if (focus.tl) focus.tl.kill();
+  focus.tl = gsap.timeline().to(focus, { hold: 0, duration: .8, ease: "power2.out" }).call(() => { focus.held = null; gsap.set(view, { z: 1, x: 0, y: 0 }); });
+}
+
+/* ---------- la plongée : on glisse sur les années, la caméra entre dans l'essaim jusqu'au souvenir ---------- */
+function showDive() {
+  const P = G.dv.P, box = $("#dys");
+  if (!box) return;
+  if (!box.dataset.w) { box.dataset.w = "1"; $("#dysX").addEventListener("click", exitDive); addEventListener("keydown", (e) => { if (e.key === "Escape") exitDive(); }); }
+  box.hidden = !G.dv.want;
+  if (P) $("#dysT").textContent = "Dans l'essaim · " + (P.year || "?") + " · " + (P.name.length > 26 ? P.name.slice(0, 25) + "…" : P.name);
+}
+function startDive(P) {
+  const dv = G.dv;
+  if (!P || !C.dyson) return;
+  if (focus.held) dismiss();
+  if (!dv.want && dv.k < .01) dv.dir.copy(cam.position).normalize();   // on part de là où on est
+  dv.P = P; dv.want = 1;
+  gsap.killTweensOf(dv, "k");
+  gsap.to(dv, { k: 1, duration: 1.7, ease: "power3.inOut" });
+  showDive();
+}
+function exitDive() {
+  const dv = G.dv;
+  if (!dv.want) return;
+  dv.want = 0;
+  gsap.killTweensOf(dv, "k");
+  gsap.to(dv, { k: 0, duration: 1.5, ease: "power3.inOut", onComplete: () => { if (!dv.want) dv.P = null; } });
+  if (focus.held) dismiss();
+  showDive();
+}
+
+/* ---------- une photo est affichée : on passe à la suivante (dir = 1) ou à la précédente (-1), dans l'ordre du temps ---------- */
+function swipeTo(dir) {
+  const cur = focus.held;
+  if (!cur || plates.length < 2) return;
+  if (sw.busy) { sw.q = dir; return; }                               // un geste de plus pendant le passage : il passera juste après
+  const next = plates[(cur.n + dir + plates.length) % plates.length];
+  sw.busy = true;
+  if (focus.leave) focus.leave.kill();
+  const done = () => { sw.busy = false; const d = sw.q; sw.q = 0; if (d) swipeTo(d); };
+  gsap.to(sw, { o: 0, x: -dir * 70, duration: .17, ease: "power2.in", overwrite: "auto", onComplete: () => {
+    if (!focus.held) { sw.x = 0; sw.o = 1; sw.q = 0; sw.busy = false; return; }   // elle a été renvoyée entre-temps
+    focus.fine = 0;                                                  // l'ancienne est déjà effacée : la suivante s'ouvre tout de suite
+    present(next, true);                                             // et reste jusqu'à ce qu'on la renvoie
+    sw.x = dir * 70;
+    gsap.to(sw, { o: 1, x: 0, duration: .42, ease: "power3.out", overwrite: "auto", onComplete: done });
+  } });
+}
+
+/* ---------- la galaxie : son orientation (bascule lente, geste, inclinaison de l'appareil) et l'orbite propre de chaque souvenir ---------- */
+const _eu = new THREE.Euler(), _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4();
+function gyroM(pp, out) {                                            // le repère de la galaxie à l'instant pp : périodique, donc la boucle reste parfaite
+  const on = C.sway ? 1 : 0;
+  _eu.set(C.swayPitch * RAD * on * Math.sin(TAU * pp + .6), -TAU * Math.round(C.spin) * pp, C.swayRoll * RAD * on * Math.sin(TAU * 2 * pp + 1.9), "YXZ");
+  out.makeRotationFromQuaternion(G.gy.q).multiply(_m1.makeRotationZ(U.uRoll.value)).multiply(_m2.makeRotationFromEuler(_eu));
+  if (G.gy.x || G.gy.y) out.premultiply(_m1.makeRotationFromEuler(_eu.set(G.gy.x, G.gy.y, 0, "XYZ")));
+  return out;
+}
+function kep(P, M, out) {                                            // sa position sur son orbite : la même formule que sur la carte graphique
+  const e = P.e;
+  let E = M + e * Math.sin(M);
+  for (let i = 0; i < 5; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  let x = P.R * (Math.cos(E) - e), y = 0, z = P.R * Math.sqrt(1 - e * e) * Math.sin(E), c, sn, t;
+  c = Math.cos(P.om); sn = Math.sin(P.om); t = x * c + z * sn; z = z * c - x * sn; x = t;                // rotY(om)
+  c = Math.cos(P.tilt); sn = Math.sin(P.tilt); t = y * c - z * sn; z = y * sn + z * c; y = t;            // rotX(inc)
+  c = Math.cos(P.node); sn = Math.sin(P.node); t = x * c + z * sn; z = z * c - x * sn; x = t;            // rotY(node)
+  return out.set(x, y, z);
+}
+function plateAt(P, pp, out) {                                       // où est un souvenir à l'instant pp de la boucle, dans la scène
+  kep(P, P.phase + pp * P.turns * TAU, out).multiplyScalar(1 + U.uSwell.value);
+  return out.applyMatrix4(pp === G.mP ? G.M : gyroM(pp, G.Mt));
+}
+function spinStep(dt, p) {                                           // à chaque image : l'élan de la galaxie, son retour à l'allure de repos, sa respiration
+  const g = G.gy;
+  if (g.drag && !ptr.down) g.drag = false;                           // sécurité : plus aucun doigt posé, on ne tient plus la galaxie
+  if (!G.testing) {
+    const wl = g.w.length();
+    if (wl > 1e-4) { if (!g.drag) { _q.setFromAxisAngle(_ax.copy(g.w).divideScalar(wl), wl * dt); g.q.premultiply(_q).normalize(); } g.w.multiplyScalar(Math.exp(-dt * C.inertia)); }
+    else g.w.set(0, 0, 0);
+    if (G.idle > .95 && !g.drag) g.q.slerp(_id, 1 - Math.exp(-dt / 7));   // au repos complet, elle reprend peu à peu son allure
+    g.x += (g.tx - g.x) * (1 - Math.exp(-dt * 6)); g.y += (g.ty - g.y) * (1 - Math.exp(-dt * 6));
+  }
+  U.uSwell.value = (C.sway ? .035 * Math.sin(TAU * 2 * p) : 0) + G.nc.swell;   // elle respire ; et le noyau l'attire quand on le touche
+  U.uNuc.value = G.nc.k;
+}
+
+/* ---------- au repos, des comètes percutent les souvenirs : à des moments fixes de la boucle, qui reste parfaite ---------- */
+const STR = { list: [], mesh: null, mat: null, N: 56 };
+function planStrikes() {
+  STR.list = [];
+  const n = Math.max(0, Math.round(C.strikes || 0));
+  let last = null;
+  for (let i = 0; i < n; i++) {
+    const pi = (i + .37) / n;
+    const order = plates.map((P) => { plateAt(P, pi, v3b); return { P, s: v3b.z - .35 * Math.abs(v3b.x) - .2 * Math.abs(v3b.y) }; }).sort((a, b) => b.s - a.s);
+    const pick = order.find((o) => o.P !== last) || order[0];
+    if (!pick) return;
+    last = pick.P;
+    STR.list.push({ p: pi, P: pick.P, side: i % 2 ? 1 : -1 });
+  }
+}
+function buildStriker() {
+  const N = STR.N, f = new Float32Array(N);
+  for (let j = 0; j < N; j++) f[j] = 1 - j / N;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  geo.setAttribute("aF", new THREE.BufferAttribute(f, 1));
+  STR.mat = new THREE.ShaderMaterial({
+    uniforms: { uScale: U.uScale, uBri: { value: 0 } },
+    vertexShader: "uniform float uScale, uBri; attribute float aF; varying float vA;\nvoid main() { vec4 pv = modelViewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * pv; gl_PointSize = clamp(mix(.014, .09, aF * aF) * uScale / max(.2, -pv.z), 1., 48.); vA = aF * aF * uBri; }",
+    fragmentShader: "varying float vA;\nvoid main() { vec2 q = gl_PointCoord - .5; float a = smoothstep(1., 0., dot(q, q) * 4.); a *= a * vA; gl_FragColor = vec4(vec3(.82, .92, 1.) * a * 1.6, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}",
+    transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor
+  });
+  STR.mesh = new THREE.Points(geo, STR.mat);
+  STR.mesh.frustumCulled = false; STR.mesh.visible = false;
+  scene.add(STR.mesh);
+}
+function strikeStep(p) {
+  const dT = 1.5 / C.loopDuration, dI = 2.6 / C.loopDuration, gate = G.idle;
+  let act = null, tr = -1, ti = -1;
+  for (const st of STR.list) { let d = p - st.p; d -= Math.round(d); if (d > -dT && d < 0) { act = st; tr = 1 + d / dT; } else if (d >= 0 && d < dI) { act = st; ti = d / dI; } }
+  G.strikeP = act && gate > .3 && (tr > .55 || (ti >= 0 && ti < .7)) ? act.P : null;   // le souvenir visé par la comète devient la cible du panneau
+  if (act && ti >= 0 && gate > .01) { U.uImp.value.set(act.P.R, act.P.phase, ti, gate); plateAt(act.P, p, U.uImpW.value); }
+  else U.uImp.value.z = -1;
+  if (!STR.mesh) return;
+  STR.mesh.visible = !!act && tr >= 0 && gate > .01;
+  if (!STR.mesh.visible) return;
+  STR.mat.uniforms.uBri.value = gate;
+  const T = plateAt(act.P, p, v3b), S = plateAt(act.P, act.p, v3c).add(v3d.set(act.side * 10, 4.5, -9));   // elle arrive de loin, derrière, sur un côté
+  const cx = (S.x + T.x) / 2, cy = (S.y + T.y) / 2 + 2.6, cz = (S.z + T.z) / 2, arr = STR.mesh.geometry.attributes.position.array;
+  const e = Math.pow(tr, 1.7);                                       // elle accélère, attirée
+  for (let j = 0; j < STR.N; j++) {
+    const t = Math.max(0, e - j * .016), a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c2 = t * t;
+    arr[j * 3] = a * S.x + b * cx + c2 * T.x; arr[j * 3 + 1] = a * S.y + b * cy + c2 * T.y; arr[j * 3 + 2] = a * S.z + b * cz + c2 * T.z;
+  }
+  STR.mesh.geometry.attributes.position.needsUpdate = true;
+}
+
+/* ---------- au repos, un viseur fantôme montre le geste : il approche un souvenir, qui s'ouvre, puis repart ---------- */
+const ghost = { on: false, t0: 0, cyc: -1, P: null, last: null, sx: 0, sy: 0, ax: 0, ay: 0 };
+const setGh = gsap.quickSetter("#gh", "opacity");
+const ease2 = (x) => (x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+function ghostStep(tNow, p) {
+  const want = C.ghost && G.idle > .95 && !G.testing && !focus.held && !G.lock;
+  if (!want) {
+    if (ghost.on) { ghost.on = false; setGh(0); gsap.to(ptr, { m: ptr.on ? 1 : 0, duration: .45, ease: "power2.out", overwrite: "auto" }); }
+    return;
+  }
+  if (!ghost.on) { ghost.on = true; ghost.t0 = tNow; ghost.cyc = -1; gsap.killTweensOf(ptr, "m"); }
+  const t = (tNow - ghost.t0) / 1000, CY = 9.5, k = Math.floor(t / CY), u = t - k * CY;
+  if (k !== ghost.cyc) {                                             // un nouveau tour : il choisit un souvenir bien placé, au centre de l'écran
+    ghost.cyc = k; ghost.sx = ptr.x; ghost.sy = ptr.y; ghost.P = null;
+    let bz = 1e9;
+    for (const P of plates) {
+      if (P === ghost.last) continue;
+      let ok = true;
+      for (const dt of [0, 2.7, 5.4]) {                              // maintenant, au milieu et à la fin de la démonstration
+        plateAt(P, p + dt / C.loopDuration, v3b).project(cam);
+        if (v3b.z > 1 || v3b.x < -.45 || v3b.x > .32 || v3b.y < -.3 || v3b.y > .5) { ok = false; break; }
+      }
+      if (!ok) continue;
+      const dz = plateAt(P, p, v3c).applyMatrix4(cam.matrixWorldInverse).z * -1;
+      if (dz < bz) { bz = dz; ghost.P = P; }
+    }
+    ghost.last = ghost.P;
+  }
+  if (!ghost.P) { ptr.m = Math.max(0, ptr.m - .02); setGh(0); return; }
+  plateAt(ghost.P, p, v3b).project(cam);
+  const tx = v3b.x + Math.sin(t * 1.3) * .012, ty = v3b.y + Math.cos(t * 1.1) * .012;
+  if (u < 1.9) { const e = ease2(u / 1.9); ptr.x = ghost.sx + (tx - ghost.sx) * e; ptr.y = ghost.sy + (ty - ghost.sy) * e; ptr.m = .95 * e; ghost.ax = tx; ghost.ay = ty; }
+  else if (u < 5.4) { ptr.x = tx; ptr.y = ty; ptr.m = .95; ghost.ax = tx; ghost.ay = ty; }
+  else if (u < 7) { const e = ease2((u - 5.4) / 1.6); ptr.x = ghost.ax + .35 * e * (ghost.ax > 0 ? -1 : 1); ptr.y = ghost.ay + .22 * e; ptr.m = .95 * (1 - e); }
+  else ptr.m = 0;
+  setGh(clamp(0, 1, Math.min((u - 1.2) / .5, (5.6 - u) / .4)));
+}
+
+/* ---------- les filtres : une couleur ou une année, et seuls ses souvenirs restent allumés ---------- */
+const filt = { lock: null, prev: null, tgt: new Float32Array(64).fill(1), on: 0 };
+const smooth = (a, b, x) => { const t = clamp(0, 1, (x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function colorName(rgb) {
+  const r = rgb[0], g = rgb[1], b = rgb[2], mx = Math.max(r, g, b), c = mx - Math.min(r, g, b);
+  if (c < .1) return mx < .18 ? "noir" : mx > .82 ? "blanc" : "gris";
+  const h = ((mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4) * 60 + 360) % 360;
+  return FAM[fam(h)];
+}
+function colorScore(P, rgb) {
+  let sc = 0;
+  for (const c of P.an.pal) { const d2 = (c.rgb[0] - rgb[0]) ** 2 * .9 + (c.rgb[1] - rgb[1]) ** 2 * 1.2 + (c.rgb[2] - rgb[2]) ** 2 * .9; sc += c.share * Math.exp(-d2 / (2 * .13 * .13)); }
+  return sc;
+}
+function matchOf(f, P) {
+  if (!f) return 1;
+  if (f.mode === "year") return P.year === f.key ? 1 : 0;
+  if (f.mode === "one") return P === f.key ? 1 : 0;
+  return smooth(.05, .22, colorScore(P, f.rgb));
+}
+function refilter() {
+  const f = filt.prev || filt.lock;
+  for (let i = 0; i < 64; i++) filt.tgt[i] = i < plates.length ? matchOf(f, plates[i]) : 1;
+  filt.on = f ? 1 : 0;
+  railMark();
+}
+function setPreview(f) { filt.prev = f; refilter(); }
+function lockFilter(f) {
+  const L = filt.lock, same = L && f && L.mode === f.mode && (f.mode === "color" ? L.label === f.label : L.key === f.key);
+  filt.lock = same ? null : f;
+  refilter(); showFilter();
+}
+function showFilter() {                                              // la couleur choisie, puis ses souvenirs : on clique celui qu'on veut voir
+  const box = $("#anFl"), f = filt.lock;
+  if (!f) { box.hidden = true; box.innerHTML = ""; return; }
+  const list = plates.map((q) => ({ q, m: matchOf(f, q), s: f.mode === "color" ? colorScore(q, f.rgb) : 1 })).filter((o) => o.m > .5).sort((a, b) => b.s - a.s);
+  const sw = f.mode === "color" ? '<i style="background:rgb(' + f.rgb.map((v) => Math.round(v * 255)).join(",") + ')"></i>' : "";
+  box.innerHTML = '<button type="button" class="an-chip" id="anChip">' + sw + esc(f.label) + " · " + list.length + " souvenir" + (list.length > 1 ? "s" : "") + " · tout afficher</button>"
+    + '<div class="an-th">' + list.slice(0, 12).map((o) => '<button type="button" data-n="' + o.q.n + '" aria-label="' + esc(o.q.name) + '">' + (o.q.im ? '<img src="' + esc(o.q.im.src) + '" alt="">' : "") + "</button>").join("") + "</div>";
+  box.hidden = false;
+}
+function wirePanel() {
+  const ui = $("#anUi"), pal = $("#anPal"), box = $("#anFl");
+  const colorOf = (b) => { const rgb = b.dataset.rgb.split(",").map(Number); const nm = colorName(rgb); return { mode: "color", rgb, label: nm.charAt(0).toUpperCase() + nm.slice(1) }; };
+  ui.addEventListener("pointerenter", () => { G.uiHover = true; });
+  ui.addEventListener("pointerleave", () => { G.uiHover = false; setPreview(null); });
+  pal.addEventListener("pointerover", (e) => { const b = e.target.closest("button"); if (b) setPreview(colorOf(b)); });
+  pal.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) lockFilter(colorOf(b)); });
+  box.addEventListener("click", (e) => {
+    if (e.target.closest("#anChip")) { filt.lock = null; refilter(); showFilter(); return; }
+    const b = e.target.closest("[data-n]"); if (b) present(plates[+b.dataset.n]);
+  });
+}
+
+/* ---------- la frise des années, à droite : une ligne du temps qui grossit sous le doigt ---------- */
+let railBtns = [];
+function railMark() {                                                // le souvenir affiché en bleu ; ceux hors du filtre, en retrait
+  const f = filt.prev || filt.lock;
+  railBtns.forEach((b) => {
+    const n = b.dataset.n;
+    if (n !== undefined) { b.classList.toggle("sel", plates[+n] === shown.P); b.classList.toggle("off", !!f && filt.tgt[+n] < .5); }
+    else b.classList.toggle("off", !!f && !plates.some((q) => String(q.year || "") === b.dataset.y && filt.tgt[q.n] > .5));
+  });
+}
+function buildRail() {
+  const rail = $("#rail");
+  if (!rail || !plates.length) return;
+  const groups = G.years.map((y) => ({ y, list: plates.filter((q) => q.year === y) }));
+  const none = plates.filter((q) => !q.year);
+  if (none.length) groups.push({ y: null, list: none });
+  let html = "";
+  groups.forEach((g) => {
+    html += '<button type="button" class="yr" data-y="' + (g.y || "") + '" aria-label="' + (g.y || "Sans année") + '"><span>' + (g.y || "?") + "</span><i></i></button>";
+    g.list.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((q) => { html += '<button type="button" data-n="' + q.n + '" aria-label="' + esc(q.name) + '"><i></i></button>'; });
+  });
+  rail.innerHTML = html;
+  rail.hidden = false;
+  railBtns = Array.from(rail.children);
+  const ticks = railBtns.map((b) => gsap.quickTo(b.querySelector("i"), "scaleX", { duration: .25, ease: "power3" }));
+  const labels = railBtns.map((b) => { const sp = b.querySelector("span"); return sp ? gsap.quickTo(sp, "scale", { duration: .25, ease: "power3" }) : null; });
+  let ys = [], idx = -1, acc = 0;
+  const measure = () => { ys = railBtns.map((b) => { const r = b.getBoundingClientRect(); return r.top + r.height / 2; }); };
+  const lens = (y) => railBtns.forEach((b, i) => { const k = Math.exp(-Math.pow((y - ys[i]) / 34, 2)); ticks[i](1 + k * (b.classList.contains("yr") ? 1 : 3)); if (labels[i]) labels[i](1 + k * .6); });
+  const pick = (b) => {
+    if (b.dataset.n !== undefined) { G.railP = plates[+b.dataset.n]; setPreview({ mode: "one", key: G.railP }); }
+    else { G.railP = null; setPreview({ mode: "year", key: b.dataset.y ? +b.dataset.y : null }); }
+  };
+  rail.addEventListener("pointerenter", () => { measure(); G.uiHover = true; });
+  rail.addEventListener("pointermove", (e) => { lens(e.clientY); const b = e.target.closest("button"); if (b && railBtns.indexOf(b) !== idx) { idx = railBtns.indexOf(b); pick(b); } });
+  let drag = null;                                                   // on glisse sur les années : on plonge vers le souvenir sous le doigt
+  const nearest = (y) => { if (!ys.length) measure(); let bi = 0, bd = 1e9; ys.forEach((v, i) => { const d = Math.abs(v - y); if (d < bd) { bd = d; bi = i; } }); return bi; };
+  const plateOf = (b) => b.dataset.n !== undefined ? plates[+b.dataset.n] : plates.find((q) => String(q.year || "") === b.dataset.y);
+  rail.addEventListener("pointerdown", (e) => { if (C.dyson && e.button === 0) { measure(); drag = { y: e.clientY, id: e.pointerId, moved: false, i: -1 }; } });
+  rail.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.moved) { if (Math.abs(e.clientY - drag.y) < 6) return; drag.moved = true; try { rail.setPointerCapture(e.pointerId); } catch (_) {} }
+    const i = nearest(e.clientY);
+    lens(e.clientY);
+    if (i !== drag.i) { drag.i = i; idx = i; pick(railBtns[i]); startDive(plateOf(railBtns[i])); }
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null;
+    if (d.moved && G.dv.P && G.dv.want) { const P = G.dv.P; gsap.delayedCall(.9, () => { if (G.dv.P === P && G.dv.want) present(P); }); }   // on relâche : on va jusqu'au souvenir
+  };
+  rail.addEventListener("pointerup", endDrag);
+  rail.addEventListener("pointercancel", () => { drag = null; });
+  rail.addEventListener("pointerleave", () => { railBtns.forEach((b, i) => { ticks[i](1); if (labels[i]) labels[i](1); }); G.uiHover = false; G.railP = null; idx = -1; setPreview(null); });
+  rail.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.n !== undefined) {
+      const P = plates[+b.dataset.n];
+      if (C.dyson) { startDive(P); gsap.delayedCall(1.1, () => { if (G.dv.P === P && G.dv.want) present(P); }); }   // on va vers le souvenir, puis il se présente
+      else present(P);
+    } else {
+      if (C.dyson) startDive(plateOf(b));
+      lockFilter({ mode: "year", key: b.dataset.y ? +b.dataset.y : null, label: b.dataset.y || "Sans année" });
+    }
+  });
+  rail.addEventListener("wheel", (e) => {                            // deux doigts vers le haut : on remonte le temps
+    e.preventDefault(); e.stopPropagation();
+    if (!ys.length) measure();
+    acc += e.deltaY;
+    if (Math.abs(acc) < 36) return;
+    idx = clamp(0, railBtns.length - 1, (idx < 0 ? railBtns.length - 1 : idx) - Math.sign(acc));
+    acc = 0;
+    lens(ys[idx]); pick(railBtns[idx]);
+  }, { passive: false });
+}
+
+/* ---------- une image : sans souris, tout dépend de p et de rien d'autre ---------- */
+function frame() {
+  const p = state.p % 1;                                             // p = 1 est exactement la même image que p = 0
+  U.uT.value = p;
+  const tNow = performance.now(), dtS = clamp(0, .05, (tNow - (G.t || tNow)) / 1000);
+  G.t = tNow;
+  spinStep(dtS, p);
+  gyroM(p, G.M); G.mP = p; U.uGyro.value.setFromMatrix4(G.M);
+  const dv = G.dv;
+  if (dv.P && dv.want) {                                             // plongée : la caméra se place derrière le souvenir visé, sur son rayon, et le suit sur son orbite
+    plateAt(dv.P, p, v3b);
+    dv.len = v3b.length();
+    v3b.divideScalar(dv.len || 1); v3b.y = clamp(-.8, .8, v3b.y); v3b.normalize();
+    dv.dir.lerp(v3b, .07).normalize();
+    if (ptr.zoom > 1.25) exitDive();                                 // on s'éloigne : on ressort
+  }
+  const far = Math.max(1, ptr.zoom), cy = Math.cos(ptr.yaw), sy = Math.sin(ptr.yaw);
+  const ox = -G.shift * far + Math.sin(TAU * p) * .5 + ptr.px * C.parallax, oz = G.dist * ptr.zoom;
+  cam.position.set(ox * cy + oz * sy, (2 + Math.sin(2 * TAU * p) * .15 + ptr.py * C.parallax * .6) * far, oz * cy - ox * sy);   // tout le pied de caméra tourne autour du centre
+  if (dv.k > 0) cam.position.lerp(v3c.copy(dv.dir).multiplyScalar(dv.len + C.diveDepth), dv.k);   // plongé : on est derrière le souvenir, il est entre nous et le noyau
+  cam.lookAt(-G.shift * far * cy, 0, G.shift * far * sy);
+  /* en approchant, la photo visée vient se présenter ; au plus près, elle passe en HD */
+  const zh = clamp(0, 1, (1 - ptr.zoom) / (1 - C.zoomMin));
+  if (focus.held) G.lock = focus.held;
+  else if (zh > .05) { if (!G.lock) G.lock = focus.P; }
+  else G.lock = null;
+  G.holdEff = Math.max(focus.hold, G.lock && G.lock === focus.P ? zh : 0) * (view.z < 1 ? clamp(0, 1, (view.z - .45) / .55) : 1);   // en la réduisant, on la renvoie peu à peu
+  cam.updateMatrixWorld();
+  {                                                                  // le noyau : où il est à l'écran, et si la souris est dessus
+    v3.set(0, 0, 0).applyMatrix4(cam.matrixWorldInverse);
+    const kc = G.h / 2 / Math.max(.5, -v3.z * TAN), nc = G.nc, mx0 = (ptr.x * .5 + .5) * G.w, my0 = (-ptr.y * .5 + .5) * G.h;
+    nc.x = G.w / 2 + v3.x * kc; nc.y = G.h / 2 - v3.y * kc; nc.r = C.holeRadius * kc;
+    const zone = Math.max(nc.r * 3, 110);
+    const want = ptr.on && ptr.m > .3 && !G.lock && !G.uiHover && !dv.want && !ghost.on && !G.gy.drag ? clamp(0, 1, (zone - Math.hypot(mx0 - nc.x, my0 - nc.y)) / (zone * .55)) : 0;
+    nc.on = want > .5 && Math.hypot(mx0 - nc.x, my0 - nc.y) < nc.r * 2.2;   // au cœur du disque : appuyer attire les souvenirs, même si l'un d'eux passe devant
+    nc.hover += (want - nc.hover) * .12;
+    if (nc.hover < .003) nc.hover = 0;
+    nc.k = nc.hover * .7 + Math.max(0, nc.crunch) * 1.4;
+    nc.swell = -.1 * nc.hover - .5 * nc.crunch;
+  }
+  { const want = (tNow - G.lastIn > C.idleAfter * 1000) && !G.lock && !ptr.down && !G.uiHover && !dv.want && view.z === 1 ? 1 : 0;   // personne ne touche : la scène vient te chercher
+    G.idle += (want - G.idle) * (want ? .03 : .2); if (G.idle < .002) G.idle = 0; }
+  ghostStep(tNow, p);
+  strikeStep(p);
+  for (let i = 0; i < 64; i++) U.uMatch.value[i] += (filt.tgt[i] - U.uMatch.value[i]) * .14;
+  U.uFilt.value += (filt.on - U.uFilt.value) * .14;
+  U.uMouse.value.set(ptr.x, ptr.y);
+  U.uMass.value = ptr.m * (1 - clamp(0, 1, G.nc.crunch * 1.6));   // en attirant les souvenirs, la souris lâche sa propre gravité
+  U.uPulse.value = ptr.w;
+  const want = Math.max(clamp(0, 1, (ptr.m - 1) / Math.max(.01, C.press - 1)), ptr.w > 0 && ptr.w < 1 ? (1 - ptr.w) * .8 : 0);
+  ptr.agit += (want - ptr.agit) * .12;                               // le trouble monte au clic et retombe après l'onde
+  if (ptr.agit < .003) ptr.agit = 0;
+  U.uAgit.value = ptr.agit;
+  U.uFocus.value.z = G.holdEff; U.uFocus.value.w = focus.fine;
+  G.thru = G.holdEff > .5 && view.z > 5 ? clamp(0, 1, Math.log(view.z / 5) / Math.log(C.thruMax / 5)) : 0;   // au-delà de cinq fois, on entre dans la photo
+  U.uThru.value = G.thru;
+  { const k2 = G.h / 2 / (-U.uShow.value.z * TAN); U.uPz.value = Math.max(1, view.z); U.uPan.value.set(view.x / k2, -view.y / k2); }
+  {                                                                  // l'image elle-même : une vraie image nette posée par-dessus la scène, sans aucun grain
+    const F = focus.P, hd = F && F.im ? clamp(0, 1, (G.holdEff - .5) / .4) * focus.fine : 0;
+    const hdE = hd * (1 - clamp(0, 1, G.thru / .45));                 // en la traversant, l'image s'efface et ses particules reviennent
+    U.uHd.value = hdE;
+    { const navOn = C.swipe && G.lock && G.holdEff > .55 && hd > .4 && plates.length > 1;   // la photo est affichée : de quoi passer à la suivante
+      if (navOn !== shown.nav) { shown.nav = navOn; $("#nav").hidden = !navOn; }
+      if (navOn && shown.navP !== G.lock) { shown.navP = G.lock; const L = G.lock; $("#navT").textContent = two(L.n + 1) + " / " + two(plates.length) + " · " + (L.year || "?") + " · " + (L.name.length > 22 ? L.name.slice(0, 21) + "…" : L.name); } }
+    setMain(1 - hd);                                                 // le titre s'efface : l'image a toute la place
+    if ((hd > .98) !== shown.mainOff) { shown.mainOff = hd > .98; $(".main").style.visibility = shown.mainOff ? "hidden" : "visible"; }
+    if (bloomPass) bloomPass.strength = C.bloomStrength * (1 - hdE);
+    if (hd > .01) {
+      const sh = U.uShow.value, hk = G.holdEff;
+      plateAt(F, p, v3).applyMatrix4(cam.matrixWorldInverse);
+      const vx = v3.x + (sh.x - v3.x) * hk, vy = v3.y + (sh.y - v3.y) * hk, vz = v3.z + (sh.z - v3.z) * hk, k = G.h / 2 / (-vz * TAN), g = 1 + .25 * hk;
+      const zz = Math.max(1, view.z), w0 = F.w * g * k, h0 = w0 * (hdImg.naturalHeight || 1) / (hdImg.naturalWidth || 1), wpx = w0 * zz, hpx = h0 * zz;
+      G.img = { x: G.w / 2 + vx * k + view.x, y: G.h / 2 - vy * k + view.y, w: wpx, h: hpx, w0, h0 };   // où est l'image, pour les gestes
+      setHd({ x: G.img.x - wpx / 2 + sw.x, y: G.img.y - hpx / 2, scale: wpx / (hdImg.naturalWidth || 1), opacity: hdE * sw.o, visibility: hdE * sw.o > .01 ? "visible" : "hidden" });
+    } else if (shown.hd) setHd({ opacity: 0, visibility: "hidden" });
+    shown.hd = hd > .01;
+  }
+  U.uClock.value = ptr.agit ? (performance.now() / 1000) % 600 : 0;
+  const now = performance.now();
+  if ((ptr.on || ghost.on) && prev.t) {                              // vitesse du geste, lissée
+    const dt = Math.max(1, now - prev.t) / 1000;
+    U.uVel.value.x += (clamp(-3, 3, (ptr.x - prev.x) / dt * .25) - U.uVel.value.x) * .15;
+    U.uVel.value.y += (clamp(-3, 3, (ptr.y - prev.y) / dt * .25) - U.uVel.value.y) * .15;
+  } else U.uVel.value.set(0, 0);
+  prev.x = ptr.x; prev.y = ptr.y; prev.t = now;
+  if (bloomOn) composer.render(); else renderer.render(scene, cam);
+
+  /* ----- le viseur, puis l'interface de données ----- */
+  setProg(p);
+  const pc = Math.floor(p * 100);
+  if (pc !== shown.prog) { shown.prog = pc; $("#rProg").textContent = "Boucle " + pc + " %"; }
+  const ag = Math.round(ptr.agit * 100);
+  if (ag !== shown.ag) { shown.ag = ag; $("#rMass").textContent = "Perturbation " + ag + " %"; }
+  if (!C.hud) return;
+  const mx = (ptr.x * .5 + .5) * G.w, my = (-ptr.y * .5 + .5) * G.h;
+  setSight({ x: mx, y: my, opacity: clamp(0, 1, ptr.m) * (1 - U.uHd.value) });   // en HD, le viseur s'efface : rien ne passe devant l'image
+  setRing({ scale: 1 + (ptr.m - 1) * .28 });
+  const reach = C.reach * (1 + .35 * Math.max(ptr.m - 1, 0));
+  let best = null, bd = 1e9, front = null, fz = 1e9;
+  for (const P of plates) {                                          // où est chaque souvenir, calculé comme sur la carte graphique
+    P.a = P.phase + p * P.turns * TAU;
+    kep(P, P.a, v3); P.wx = v3.x; P.wz = v3.z; P.rr = v3.length() * (1 + U.uSwell.value);   // dans le repère propre de la galaxie : pour la carte orbitale
+    plateAt(P, p, v3).applyMatrix4(cam.matrixWorldInverse);
+    P.k = G.h / 2 / (-v3.z * TAN);                                   // pixels par unité de scène, à cette profondeur
+    P.sx = G.w / 2 + v3.x * P.k; P.sy = G.h / 2 - v3.y * P.k;
+    const behind = v3.z > -.8;                                       // derrière la caméra : ni visé, ni au premier plan
+    P.d = ptr.m > .02 && !behind ? Math.hypot(ptr.x * -v3.z * TAN * cam.aspect - v3.x, ptr.y * -v3.z * TAN - v3.y) : 1e9;
+    if (!behind && -v3.z < fz) { fz = -v3.z; front = P; }
+    if (P.d < bd) { bd = P.d; best = P; }
+  }
+  let near = 0;
+  if (G.nc.crunch > .08) best = null;                                // on attire les souvenirs : aucun n'est visé
+  if (best && bd < reach) { const t = clamp(0, 1, (reach - bd) / (reach * .88)); near = Math.min(1, ptr.m) * t * t * (3 - 2 * t); } else best = null;
+  G.hover = best;
+  if (G.lock) { best = G.lock; near = Math.max(near, G.holdEff); }             // la photo présentée reste la cible
+  else if (!best && G.strikeP) best = G.strikeP;                               // au repos : celle que la comète va percuter
+  else if (!best && front && fz < G.dist - C.openAt + .5) best = front;        // sans souris : celle qui passe au premier plan
+  if (dv.P && dv.want && !G.lock) { best = dv.P; near = Math.max(near, dv.k); }   // en plongée, on ne vise que le souvenir choisi
+  aim(G.lock || (near > .4 || best === front || best === G.strikeP ? best : null));
+  if (G.railP && !G.lock) { best = G.railP; near = 0; }                        // la frise montre ce souvenir dans le panneau
+  drawHud(p, best, near, mx, my);
+}
+
+const pct = (v) => Math.round(v * 100) + " %";
+function panel(P) {                                                  // rempli quand le souvenir visé change
+  const A = P ? P.an : G.all, Y = G.years;
+  $("#anY").textContent = P ? (P.year || "Année ?") : Y.length > 1 ? Y[0] + " → " + Y[Y.length - 1] : Y.length ? String(Y[0]) : "Mémoire";
+  $("#anY").style.fontSize = $("#anY").textContent.length > 6 ? "34px" : "";
+  $("#anN").textContent = P ? P.name : plates.length + " souvenirs";
+  $("#anF").textContent = P ? (P.note || P.file) : "Approche la souris d'un souvenir";
+  const lk = filt.lock && filt.lock.mode === "color" ? filt.lock.rgb.join(",") : "";
+  $("#anPal").innerHTML = A.pal.map((c) => { const k = c.rgb.join(","); return '<button type="button" class="' + (k === lk ? "on" : "") + '" data-rgb="' + k + '" aria-label="Couleur ' + colorName(c.rgb) + '" style="flex:' + Math.max(.07, c.share).toFixed(3) + ";background:rgb(" + c.rgb.map((v) => Math.round(v * 255)).join(",") + ')">' + (P ? "<b>" + Math.round(c.share * 100) + "</b>" : "") + "</button>"; }).join("");
+  $("#anHue").innerHTML = A.part.map((v, i) => '<i style="height:' + Math.max(3, Math.round(v * 100)) + "%;background:hsl(" + FAMH[i] + ',72%,60%)"></i>').join("");
+  $("#anLum").innerHTML = A.hist.map((v) => '<i style="height:' + Math.max(3, Math.round(v * 100)) + '%"></i>').join("");
+  const rows = P
+    ? [["Ambiance", A.amb], ["Teinte", A.tint], ["Lumière", A.lum + " · " + pct(A.L)], ["Saturation", pct(A.C)], ["Température", A.temp],
+       ["Orbite", "a " + fr(P.R, 1) + " · e " + fr(P.e, 2)], ["Inclinaison", Math.round(Math.abs(P.tilt) / RAD) + "°"], ["Au noyau", '<span id="lvR"></span>'], ["Distance", '<span id="lvD"></span>'], ["Particules", P.count.toLocaleString("fr-BE")], ["Reformé", '<span id="lvF"></span>'], ["Traversée", '<span id="lvT"></span>']]
+    : [["Ambiance", A.amb], ["Lumière", A.lum + " · " + pct(A.L)], ["Saturation", pct(A.C)], ["Température", A.temp],
+       ["Dossiers", String(new Set(plates.map((q) => q.name)).size)], ["Particules", G.total.toLocaleString("fr-BE")], ["En voyage", pct(C.flow * G.awayMean)]];
+  $("#anDl").innerHTML = rows.map((r) => "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>").join("");
+}
+
+function drawHud(p, P, near, mx, my) {
+  const g = hud, w = G.w, h = G.h;
+  g.clearRect(0, 0, w, h);
+  if (P !== shown.P && (!G.uiHover || G.railP)) { shown.P = P; panel(P); railMark(); }   // sous la souris, le panneau ne change pas
+  if (G.uiHover && !G.railP) P = shown.P || null;
+  g.lineWidth = 1; g.font = "10px 'Instrument Sans',sans-serif"; g.textBaseline = "middle";
+  if ("letterSpacing" in g) g.letterSpacing = "1px";
+  if (G.gauge > .01) {                                               // le curseur de distance : il apparaît pendant le geste
+    const x = G.gut + 4, y0 = 150, y1 = Math.max(y0 + 120, h - (G.small ? 330 : 400)), ph = G.lock && G.holdEff > .5, t = ph ? 1 - Math.log(Math.max(.45, view.z) / .45) / Math.log(C.thruMax / .45) : Math.log(ptr.zoom / C.zoomMin) / Math.log(C.zoomMax / C.zoomMin), ym = y0 + clamp(0, 1, t) * (y1 - y0);
+    g.globalAlpha = G.gauge;
+    g.strokeStyle = "rgba(255,255,255,.45)";
+    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1);
+    for (let i = 0; i <= 24; i++) { const yy = y0 + i / 24 * (y1 - y0); g.moveTo(x, yy); g.lineTo(x + (i % 6 ? 4 : 9), yy); }
+    g.stroke();
+    g.fillStyle = "#a9d4ff"; g.fillRect(x - 3, ym - 1.5, 20, 3);
+    g.textAlign = "left"; g.fillStyle = "#b9b9c2";
+    g.fillText(ph ? "INTÉRIEUR" : "HD", x + 16, y0); g.fillText(ph ? "ORBITE" : "GALAXIE", x + 16, y1);
+    g.fillStyle = "#fff"; g.fillText(ph ? (G.thru > 0 ? "TRAVERSÉE " + Math.round(G.thru * 100) + " %" : "PHOTO × " + fr(view.z, 1)) : "DISTANCE × " + fr(ptr.zoom, 1), x + 26, clamp(y0 + 14, y1 - 14, ym));
+    g.globalAlpha = 1;
+  }
+  if (P) {
+    const now = performance.now();
+    if (now - shown.live > 110) {                                    // valeurs en direct, dix fois par seconde
+      shown.live = now;
+      const a = $("#lvA"), d = $("#lvD"), f = $("#lvF");
+      const rr = $("#lvR"); if (rr) rr.textContent = fr(P.rr, 2);
+      if (d) d.textContent = P.d > 99 ? "hors portée" : fr(P.d, 2);
+      if (f) f.textContent = pct(1 - C.flow * G.awayMean * (1 - near));
+      const tq = $("#lvT"); if (tq) tq.textContent = pct(G.thru || 0);
+    }
+    /* le souvenir visé : quatre équerres, un losange au centre, et une ligne de rappel vers le panneau */
+    const hd = P === G.lock ? G.holdEff : 0, sh = U.uShow.value, k2 = G.h / 2 / (-sh.z * TAN);
+    const cx = (P.sx + (mx - P.sx) * near * C.pull * (1 - hd)) * (1 - hd) + (G.w / 2 + sh.x * k2) * hd, cy = (P.sy + (my - P.sy) * near * C.pull * (1 - hd)) * (1 - hd) + (G.h / 2 - sh.y * k2) * hd;
+    const sc = (P.k * (1 - hd) + k2 * hd) * (1 + C.grow * near * (1 - hd) + .25 * hd), hw = P.w * sc / 2 + 8, hh = P.h * sc / 2 + 8, c = 12;
+    g.strokeStyle = "rgba(255,255,255," + ((.3 + .6 * near) * (1 - (G.thru || 0))).toFixed(2) + ")";
+    g.beginPath();
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach((q) => { const x = cx + q[0] * hw, y = cy + q[1] * hh; g.moveTo(x, y - q[1] * c); g.lineTo(x, y); g.lineTo(x - q[0] * c, y); });
+    g.moveTo(cx, cy - 5); g.lineTo(cx + 5, cy); g.lineTo(cx, cy + 5); g.lineTo(cx - 5, cy); g.closePath();
+    if (!G.small) {
+      const px = G.panel.x - 14, py = G.panel.y, ex = cx + hw, ey = cy - hh;
+      g.moveTo(ex, ey); g.lineTo(Math.max(ex + 12, Math.min(px - 26, ex + Math.abs(ey - py))), py); g.lineTo(px, py);
+      g.stroke();
+      g.fillStyle = "#fff"; g.fillRect(px - 2, py - 2, 4, 4);
+    } else g.stroke();
+  }
+  if (G.nc.hover > .03 || Math.abs(G.nc.crunch) > .03) {              // le noyau : un réticule, et ce qu'il fait
+    const nc = G.nc, ny = G.years.length;
+    g.globalAlpha = Math.min(1, Math.max(nc.hover, Math.abs(nc.crunch))) * (1 - U.uHd.value);
+    g.strokeStyle = "rgba(255,255,255,.7)"; g.setLineDash([2, 5]);
+    g.beginPath(); g.arc(nc.x, nc.y, nc.r * (1.5 + .25 * nc.crunch), 0, TAU); g.stroke(); g.setLineDash([]);
+    const lx = nc.x + nc.r * 1.45, ly = nc.y - nc.r * 1.45;
+    g.beginPath(); g.moveTo(nc.x + nc.r * 1.06, nc.y - nc.r * 1.06); g.lineTo(lx, ly); g.lineTo(lx + 26, ly); g.stroke();
+    g.textAlign = "left"; g.fillStyle = "#fff"; g.fillText("NOYAU", lx + 32, ly - 7);
+    g.fillStyle = "#b9b9c2"; g.fillText(plates.length + " SOUVENIRS · " + Math.max(1, ny) + " ANNÉE" + (ny > 1 ? "S" : ""), lx + 32, ly + 7);
+    g.fillText(nc.press ? "ATTIRÉS " + Math.round(clamp(0, 1, nc.crunch) * 100) + " %" : touchUI ? "APPUIE ET MAINTIENS : TU LES ATTIRES" : "MAINTIENS : TU LES ATTIRES", lx + 32, ly + 21);
+    g.globalAlpha = 1;
+  }
+  if (G.small) return;
+  const tall = h >= 760;                                             // fenêtre peu haute : la carte orbitale laisse la place au panneau
+
+  /* la carte orbitale, vue du dessus : le trou noir au centre, un carré par souvenir */
+  const R0 = 60, rx = w - G.gut - R0, ry = h - 46 - R0, sc = R0 / (Math.max.apply(null, G.orbR) * 1.12);
+  if (tall) {
+  g.strokeStyle = "rgba(255,255,255,.075)";                          // l'orbite de chaque souvenir, vue du dessus
+  g.beginPath();
+  for (const Q of plates) { const rg = Q.ring; for (let i = 0; i < rg.length; i += 2) { const x = rx + rg[i] * sc, y = ry + rg[i + 1] * sc; if (i) g.lineTo(x, y); else g.moveTo(x, y); } }
+  g.stroke();
+  g.strokeStyle = "rgba(255,255,255,.16)";
+  g.beginPath();
+  g.moveTo(rx + R0, ry); g.arc(rx, ry, R0, 0, TAU);
+  for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, e = i % 6 ? (i % 2 ? 3 : 5) : 9; g.moveTo(rx + Math.cos(a) * R0, ry + Math.sin(a) * R0); g.lineTo(rx + Math.cos(a) * (R0 + e), ry + Math.sin(a) * (R0 + e)); }
+  g.stroke();
+  const sw = p * TAU * 4;                                            // le balayage fait quatre tours par boucle
+  g.strokeStyle = "rgba(169,212,255,.55)";
+  g.beginPath(); g.moveTo(rx, ry); g.lineTo(rx + Math.cos(sw) * R0, ry + Math.sin(sw) * R0); g.stroke();
+  g.fillStyle = "#fff"; g.beginPath(); g.arc(rx, ry, 2.2, 0, TAU); g.fill();
+  for (const Q of plates) {
+    const x = rx + Q.wx * sc, y = ry + Q.wz * sc;
+    g.fillStyle = Q === P ? "#a9d4ff" : "rgba(255,255,255," + (.82 * (1 - .75 * U.uFilt.value * (1 - (Q.n < 64 ? U.uMatch.value[Q.n] : 1)))).toFixed(2) + ")";
+    g.fillRect(x - 1.5, y - 1.5, 3, 3);
+    if (Q === P) { g.strokeStyle = "#a9d4ff"; g.strokeRect(x - 5.5, y - 5.5, 11, 11); }
+  }
+  g.fillStyle = "#b9b9c2"; g.textAlign = "right";
+  g.fillText("CARTE ORBITALE", rx + R0, ry - R0 - 20);
+  }
+
+  /* la perturbation : plate au repos, elle s'agite quand on appuie */
+  const tw = 220, tx1 = tall ? rx - R0 - 40 : G.panel.x - 34, tx0 = tx1 - tw, ty = h - 62, amp = ptr.agit * 16, t = U.uClock.value;
+  g.strokeStyle = "rgba(255,255,255,.16)";
+  g.beginPath();
+  for (let i = 0; i <= 22; i++) { const x = tx0 + i / 22 * tw; g.moveTo(x, ty + 20); g.lineTo(x, ty + (i % 11 ? 23 : 27)); }
+  g.stroke();
+  g.strokeStyle = ptr.agit > .02 ? "#a9d4ff" : "rgba(255,255,255,.7)";
+  g.beginPath();
+  for (let i = 0; i <= 110; i++) {
+    const u = i / 110, env = Math.sin(u * Math.PI);
+    const y = ty - amp * env * (Math.sin(i * .37 + t * 9) * .55 + Math.sin(i * .93 - t * 14) * .3 + Math.sin(i * 2.1 + t * 23) * .15);
+    if (i) g.lineTo(tx0 + u * tw, y); else g.moveTo(tx0, y);
+  }
+  g.stroke();
+  g.fillStyle = "#b9b9c2";
+  g.fillText("PERTURBATION " + Math.round(ptr.agit * 100) + " %", tx1, ty - 26);
+
+}
+
+/* ---------- la souris : position, masse, onde, distance ---------- */
+function pointer(still) {
+  if (still) return;
+  ["pointermove", "pointerdown", "wheel", "keydown", "gesturestart"].forEach((t) => addEventListener(t, () => { G.lastIn = performance.now(); }, { passive: true, capture: true }));
+  const hit = (e) => !!(e.target && e.target.closest && e.target.closest(".hit"));   // le panneau des couleurs et la frise
+  const toX = gsap.quickTo(ptr, "x", { duration: .28, ease: "power3" }), toY = gsap.quickTo(ptr, "y", { duration: .28, ease: "power3" });
+  const toPX = gsap.quickTo(ptr, "px", { duration: 1.1, ease: "power3" }), toPY = gsap.quickTo(ptr, "py", { duration: 1.1, ease: "power3" });
+  const toZ = gsap.quickTo(ptr, "zoom", { duration: .55, ease: "power3" }), toYaw = gsap.quickTo(ptr, "yaw", { duration: .7, ease: "power3" });
+  const toVZ = gsap.quickTo(view, "z", { duration: .32, ease: "power3" }), toVX = gsap.quickTo(view, "x", { duration: .32, ease: "power3" }), toVY = gsap.quickTo(view, "y", { duration: .32, ease: "power3" });
+  const DIRW = C.wheelUpApproaches === false ? -1 : 1, fingers = new Map(), guideEl = $("#guide");
+  let Zt = 1, yawT = 0, pressed = null, t0 = 0, two = null, g0 = 1, vz = 1, vx = 0, vy = 0, endT = 0, pan = null, quiet = 0, closing = false, rot = null, core = false, gr0 = 0, wAcc = 0, wLast = 0, wOpen = true;
+  const gauge = () => { gsap.killTweensOf(G, "gauge"); gsap.to(G, { gauge: 1, duration: .2 }); gsap.to(G, { gauge: 0, duration: .6, delay: 1.9 }); };
+  const setZoom = (z) => { Zt = clamp(C.zoomMin, C.zoomMax, z); toZ(Zt); gauge(); };
+  const big = () => G.lock && G.holdEff > .5 && G.img;               // une photo est-elle présentée en grand ?
+  const inside = (e) => Math.abs(e.clientX - G.img.x) < G.img.w / 2 && Math.abs(e.clientY - G.img.y) < G.img.h / 2;
+  const hem = () => { const ax = Math.max(0, (G.img.w0 * vz - G.img.w0) / 2 + 30), ay = Math.max(0, (G.img.h0 * vz - G.img.h0) / 2 + 30); vx = clamp(-ax, ax, vx); vy = clamp(-ay, ay, vy); };
+  const settle = () => {                                             // fin du geste : assez réduite, elle repart dans le mouvement ; sinon elle reprend sa taille
+    closing = false;
+    if (vz < .8) { dismiss(); vz = 1; vx = 0; vy = 0; if (Zt < 1) setZoom(1); quiet = performance.now() + 700; }   // la fin du même geste est ignorée
+    else if (vz < 1) { vz = 1; toVZ(1); }
+  };
+  const photoZoom = (f, cx, cy) => {                                 // la photo présentée suit les doigts : agrandie autour du curseur, ou réduite
+    if (view.z === 1 && vz !== 1) { vz = 1; vx = 0; vy = 0; }
+    const nz = clamp(.4, C.thruMax, vz * f), r = nz / vz;
+    if (nz > 1) { vx = cx - (cx - vx) * r; vy = cy - (cy - vy) * r; } else { vx = 0; vy = 0; }
+    vz = nz; closing = vz < 1;
+    if (vz > 1) hem();
+    toVZ(vz); toVX(vx); toVY(vy); stay(); gauge();
+    clearTimeout(endT); endT = setTimeout(settle, 180);
+  };
+  /* la galaxie suit les doigts : glisser la fait tourner sur tous ses axes, avec de l'élan ; la souris seule lui donne un petit élan */
+  const camAx = (i) => v3c.set(cam.matrixWorld.elements[i], cam.matrixWorld.elements[i + 1], cam.matrixWorld.elements[i + 2]);   // un axe de la caméra, dans la scène : 0 droite, 4 haut, 8 vers toi
+  const clampW = () => { const w = G.gy.w, l = w.length(); if (l > 2.4) w.multiplyScalar(2.4 / l); };
+  const kick = (dx, dy, f) => { const w = G.gy.w; w.addScaledVector(camAx(4), dx * f); w.addScaledVector(camAx(0), dy * f); clampW(); };
+  const turn = (ax, ay, az) => { const q = G.gy.q; if (ax) q.premultiply(_q.setFromAxisAngle(camAx(4), ax)); if (ay) q.premultiply(_q.setFromAxisAngle(camAx(0), ay)); if (az) q.premultiply(_q.setFromAxisAngle(camAx(8), az)); q.normalize(); };
+  const spinBy = (dx, dy, dt) => {
+    turn(dx * .0062, dy * .0062, 0);
+    G.gy.w.lerp(_ax.copy(camAx(4)).multiplyScalar(dx * .0062 / dt).addScaledVector(camAx(0), dy * .0062 / dt), .45); clampW();
+  };
+  const roll = (a) => { turn(0, 0, a); };
+  const startCore = () => {                                          // on maintient sur le noyau : tous les souvenirs sont attirés vers lui
+    core = true; G.nc.press = true;
+    gsap.killTweensOf(G.nc, "crunch");
+    gsap.to(G.nc, { crunch: 1, duration: 1.2, ease: "power2.in" });
+  };
+  const endCore = (quiet2) => {                                      // on relâche : tout repart, dépasse, et la galaxie bascule sur un nouvel axe
+    if (!core) return;
+    core = false; G.nc.press = false;
+    const c = clamp(0, 1, G.nc.crunch);
+    gsap.killTweensOf(G.nc, "crunch");
+    gsap.to(G.nc, { crunch: 0, duration: quiet2 ? .6 : 1.7, ease: quiet2 ? "power2.out" : "elastic.out(1,0.42)" });
+    if (quiet2) return;
+    gsap.fromTo(ptr, { w: .0001 }, { w: 1, duration: 1.5, ease: "expo.out" });   // l'onde part du noyau
+    G.gy.w.addScaledVector(_ax.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize(), .4 + 1.1 * c); clampW();
+  };
+  const resetView = () => {                                          // double-clic : la galaxie se remet d'aplomb, à sa distance de départ
+    const q0 = G.gy.q.clone(), k = { t: 0 };
+    G.gy.w.set(0, 0, 0); G.gy.drag = false;
+    gsap.to(k, { t: 1, duration: 1.3, ease: "power3.inOut", onUpdate: () => G.gy.q.copy(q0).slerp(_id, k.t) });
+    yawT = 0; toYaw(0); setZoom(1);
+  };
+  const swipeWheel = (dx) => {                                       // deux doigts de côté sur une photo : la suivante, une fois par geste
+    const now = performance.now();
+    if (now - wLast > 140) { wAcc = 0; wOpen = true; }
+    wLast = now;
+    if (!wOpen) return;
+    wAcc += dx;
+    if (Math.abs(wAcc) > 90) { const d = Math.sign(wAcc); wOpen = false; wAcc = 0; swipeTo(d); }
+  };
+  const at = (e) => {
+    const x = e.clientX / G.w * 2 - 1, y = -(e.clientY / G.h * 2 - 1);
+    if (!ptr.on) { ptr.x = x; ptr.y = y; ptr.on = true; gsap.to(ptr, { m: 1, duration: .5, ease: "power2.out", overwrite: "auto" }); }
+    toX(x); toY(y); toPX(x); toPY(y);
+  };
+  const up = () => {
+    if (pan) { if (!sw.busy) gsap.to(sw, { x: 0, o: 1, duration: .25, overwrite: "auto" }); pan = null; return; }
+    if (!ptr.down) return;
+    ptr.down = false;
+    gsap.killTweensOf(ptr, "m");
+    const turned = rot && rot.moved;
+    if (rot) { G.gy.drag = false; rot = null; }
+    if (core) { endCore(); gsap.to(ptr, { m: ptr.on ? 1 : 0, duration: .4, ease: "power2.out" }); return; }
+    if (turned) { gsap.to(ptr, { m: ptr.on ? 1 : 0, duration: .4, ease: "power2.out" }); return; }
+    if (pressed) { pressed = null; release(); gsap.to(ptr, { m: ptr.on ? 1 : 0, duration: .4, ease: "power2.out" }); return; }
+    if (performance.now() - t0 < 320 && G.hover) { present(G.hover); gsap.to(ptr, { m: ptr.on ? 1 : 0, duration: .4, ease: "power2.out" }); return; }
+    gsap.to(ptr, { m: ptr.on ? 1 : 0, duration: 1, ease: "elastic.out(1,0.5)" });
+    if (performance.now() - t0 > 320) gsap.fromTo(ptr, { w: .0001 }, { w: 1, duration: 1.5, ease: "expo.out" });   // l'onde part de la souris
+  };
+  const out = () => { up(); ptr.on = false; toPX(0); toPY(0); gsap.killTweensOf(ptr, "m"); gsap.to(ptr, { m: 0, duration: 1.2, ease: "power2.out" }); };
+  const span = () => { const q = Array.from(fingers.values()); return { d: Math.hypot(q[0].x - q[1].x, q[0].y - q[1].y) || 1, a: Math.atan2(q[1].y - q[0].y, q[1].x - q[0].x), x: (q[0].x + q[1].x) / 2, y: (q[0].y + q[1].y) / 2 }; };
+  addEventListener("pointerdown", (e) => {
+    if (!guideEl.hidden || hit(e)) return;
+    if (e.pointerType === "touch") {
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2) { up(); pan = null; const q = span(); two = { d: q.d, a: q.a, z: Zt, yaw: yawT, last: q.d, la: q.a }; return; }   // deux doigts : pincer et tourner
+      if (fingers.size > 2) return;
+    }
+    if (big()) {                                                     // une photo est présentée : on la fait glisser, ou on la renvoie en cliquant à côté
+      if (inside(e)) { pan = { x: e.clientX, y: e.clientY, vx, vy, x0: e.clientX, y0: e.clientY, sw: vz <= 1.05 }; stay(); } else dismiss();
+      return;
+    }
+    ptr.down = true; t0 = performance.now(); at(e);
+    rot = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: e.timeStamp, moved: false };
+    requestAnimationFrame(() => {                                    // une image plus tard, on sait ce qui est sous le doigt
+      if (!ptr.down || (rot && rot.moved)) return;                   // le doigt a déjà commencé à glisser : c'est la galaxie qu'on tourne
+      pressed = G.nc.on && !G.lock ? null : G.hover;
+      if (pressed) present(pressed, true);                           // sur une photo : elle vient, passe en HD, et reste tant qu'on appuie (si le doigt glisse, elle repart)
+      else if (G.nc.on && !G.lock) startCore();                      // sur le noyau : tu attires tous les souvenirs
+      else gsap.to(ptr, { m: C.press, duration: .55, ease: "power2.out", delay: .18, overwrite: "auto" });   // dans le vide : la mémoire se trouble
+    });
+  }, { passive: true });
+  addEventListener("pointermove", (e) => {
+    if (hit(e) && !pan) return;                                      // sur l'interface, la scène reste où elle est
+    if (C.drift && e.pointerType === "mouse" && !ptr.down && !G.lock) kick(e.movementX || 0, e.movementY || 0, C.drift);   // la moindre trace de souris donne un élan
+    if (e.pointerType === "touch" && fingers.has(e.pointerId)) {
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2 && two) {
+        const q = span();
+        if (big()) { photoZoom(q.d / two.last, q.x - (G.img.x - view.x), q.y - (G.img.y - view.y)); two.last = q.d; }
+        else { setZoom(two.z * two.d / q.d); let da = q.a - two.la; da = Math.atan2(Math.sin(da), Math.cos(da)); two.la = q.a; roll(-da); }   // deux doigts qui tournent : la galaxie pivote dans l'écran
+        return;
+      }
+    }
+    if (pan) {                                                       // la photo agrandie se déplace sous le doigt ; sinon, balayée, elle laisse la place à la suivante
+      if (vz > 1) { vx = pan.vx + e.clientX - pan.x; vy = pan.vy + e.clientY - pan.y; hem(); toVX(vx); toVY(vy); }
+      else if (pan.sw && C.swipe && !sw.busy) {
+        const dx = e.clientX - pan.x0, dy = e.clientY - pan.y0;
+        if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.3) { pan = null; swipeTo(dx < 0 ? 1 : -1); return; }
+        sw.x = dx * .45; sw.o = 1 - Math.min(.45, Math.abs(dx) / 360);
+      }
+      stay();
+      return;
+    }
+    if (rot && e.pointerId === rot.id) {                             // glisser dans le vide : la galaxie tourne sous le doigt, et garde son élan
+      if (!rot.moved && Math.hypot(e.clientX - rot.x0, e.clientY - rot.y0) > 9) { rot.moved = true; G.gy.drag = true; if (core) endCore(true); if (pressed) { pressed = null; dismiss(); } gsap.to(ptr, { m: 1, duration: .25, overwrite: "auto" }); }
+      if (rot.moved) spinBy(e.clientX - rot.x, e.clientY - rot.y, Math.max(8, e.timeStamp - rot.t) / 1000);
+      rot.x = e.clientX; rot.y = e.clientY; rot.t = e.timeStamp;
+    }
+    at(e);
+  }, { passive: true });
+  const lift = (e) => { if (e.pointerType === "touch") { fingers.delete(e.pointerId); if (fingers.size < 2) two = null; } up(); if (e.pointerType !== "mouse" && !fingers.size) out(); };
+  addEventListener("pointerup", lift, { passive: true });
+  addEventListener("pointercancel", lift, { passive: true });
+  document.documentElement.addEventListener("pointerleave", out);
+  /* pavé tactile et molette. Dans l'espace : deux doigts haut ou bas pour la distance, de côté pour tourner, pincer pour agrandir ou rétrécir.
+     Sur une photo présentée : les mêmes gestes l'agrandissent ou la réduisent ; assez réduite, elle repart sur son orbite */
+  addEventListener("wheel", (e) => {
+    e.preventDefault();
+    if (!guideEl.hidden || performance.now() < quiet || hit(e)) return;
+    if (big() || (closing && G.img)) {
+      const cx = e.clientX - (G.img.x - view.x), cy = e.clientY - (G.img.y - view.y);
+      if (e.ctrlKey) photoZoom(Math.exp(-e.deltaY * .012), cx, cy);
+      else if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) photoZoom(Math.exp(e.deltaY * .0026 * DIRW), cx, cy);
+      else if (vz > 1) { vx -= e.deltaX; hem(); toVX(vx); stay(); }
+      else if (C.swipe) swipeWheel(e.deltaX);
+      return;
+    }
+    if (e.ctrlKey) setZoom(Zt * Math.exp(e.deltaY * .012));
+    else if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) setZoom(Zt * Math.exp(-e.deltaY * .0022 * DIRW));
+    else { yawT += e.deltaX * .0035; toYaw(yawT); gauge(); }
+  }, { passive: false });
+  addEventListener("gesturestart", (e) => { e.preventDefault(); g0 = big() ? 1 : Zt; gr0 = e.rotation || 0; }, { passive: false });     // Safari : le pincement arrive sous ce nom
+  addEventListener("gesturechange", (e) => {
+    e.preventDefault();
+    if (!guideEl.hidden) return;
+    if (big()) { photoZoom((e.scale || 1) / g0, e.clientX - (G.img.x - view.x), e.clientY - (G.img.y - view.y)); g0 = e.scale || 1; }
+    else { setZoom(g0 / (e.scale || 1)); const r = e.rotation || 0; roll(-(r - gr0) * RAD); gr0 = r; }   // Safari : le pavé sait aussi faire pivoter
+  }, { passive: false });
+  /* clavier : flèches pour faire tourner la galaxie, ou pour passer d'une photo à l'autre quand l'une est affichée */
+  addEventListener("keydown", (e) => {
+    if (!guideEl.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (big()) {
+      if (k === "ArrowRight" || k === "ArrowDown") { e.preventDefault(); swipeTo(1); }
+      else if (k === "ArrowLeft" || k === "ArrowUp") { e.preventDefault(); swipeTo(-1); }
+      else if (k === "Escape") dismiss();
+      return;
+    }
+    if (k === "ArrowLeft") { e.preventDefault(); kick(-1, 0, .9); }
+    else if (k === "ArrowRight") { e.preventDefault(); kick(1, 0, .9); }
+    else if (k === "ArrowUp") { e.preventDefault(); kick(0, -1, .9); }
+    else if (k === "ArrowDown") { e.preventDefault(); kick(0, 1, .9); }
+    else if (k === "0" || k === "Home") resetView();
+    else if (k === "+" || k === "=") setZoom(Zt * .8);
+    else if (k === "-" || k === "_") setZoom(Zt * 1.25);
+  });
+  addEventListener("dblclick", (e) => { if (hit(e) || big() || G.hover || G.lock || !guideEl.hidden || G.nc.hover > .3) return; resetView(); });
+}
+
+/* ---------- sur téléphone, incliner l'appareil incline la galaxie ---------- */
+let tiltOn = false;
+function tiltStart() {                                               // à lancer depuis un vrai geste : iOS demande une autorisation
+  if (tiltOn || !C.tilt || !touchUI || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const run = () => {
+    tiltOn = true;
+    let b0 = null, g0 = null;
+    addEventListener("deviceorientation", (e) => {
+      if (e.beta == null || e.gamma == null) return;
+      if (b0 === null) { b0 = e.beta; g0 = e.gamma; }
+      G.gy.tx = clamp(-.5, .5, (e.beta - b0) * RAD * C.tiltStrength);
+      G.gy.ty = clamp(-.5, .5, (e.gamma - g0) * RAD * C.tiltStrength);
+    }, { passive: true });
+  };
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") DeviceOrientationEvent.requestPermission().then((r) => { if (r === "granted") run(); }).catch(() => {});
+    else run();
+  } catch (err) { /* pas d'inclinaison : rien d'autre ne change */ }
+}
+
+/* ---------- avant d'entrer : la fiche qui montre les gestes ---------- */
+function guide() {
+  const box = $("#guide");
+  const demos = touchUI
+    ? [["one", "Un doigt qui glisse", "Tu fais tourner la galaxie, sur tous ses axes."], ["p", "Deux doigts écartés", "Tu agrandis. Resserrés, tu réduis."], ["s", "Balayer une photo", "Tu passes à la suivante, à gauche ou à droite."], ["c", "Appui sur une photo", "Elle s'affiche en grand, nette."]]
+    : [["one", "Glisser", "Tu fais tourner la galaxie, sur tous ses axes."], ["v", "Deux doigts, haut ou bas", "Tu approches jusqu'à traverser la photo, ou tu t'éloignes."], ["p", "Pincer ou écarter", "Tu réduis, ou tu agrandis."], ["c", "Clic sur une photo", "Elle s'affiche en grand. Flèches ← → : la suivante."]];
+  $("#gRow").innerHTML = demos.map((d) => '<li><div class="pad" data-k="' + d[0] + '"><i></i><i></i></div><span><b>' + d[1] + "</b>" + d[2] + "</span></li>").join("");
+  box.hidden = false;
+  const tls = [], still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  box.querySelectorAll(".pad").forEach((pad) => {                    // deux points blancs : les doigts, qui refont le geste en boucle
+    const a = pad.children[0], b = pad.children[1], k = pad.dataset.k, tl = gsap.timeline({ repeat: -1, repeatDelay: .45, paused: still, defaults: { duration: .9, ease: "power2.inOut" } });
+    if (k === "v") { gsap.set(a, { x: -11, y: 15 }); gsap.set(b, { x: 11, y: 15 }); tl.to([a, b], { y: -17 }).to([a, b], { y: 15 }, "+=.3"); }
+    else if (k === "h") { gsap.set(a, { x: -24, y: -7 }); gsap.set(b, { x: -24, y: 13 }); tl.to([a, b], { x: 24 }).to([a, b], { x: -24 }, "+=.3"); }
+    else if (k === "p") { gsap.set(a, { x: -9, y: 7 }); gsap.set(b, { x: 9, y: -7 }); tl.to(a, { x: -27, y: 17 }).to(b, { x: 27, y: -17 }, "<").to(a, { x: -9, y: 7 }, "+=.3").to(b, { x: 9, y: -7 }, "<"); }
+    else if (k === "s") { gsap.set(b, { opacity: 0 }); gsap.set(a, { x: -22, y: 0 }); tl.to(a, { x: 22 }).to(a, { x: -22 }, "+=.3"); }
+    else if (k === "one") { gsap.set(b, { opacity: 0 }); gsap.set(a, { x: -20, y: 12 }); tl.to(a, { x: 18, y: -10 }).to(a, { x: -20, y: 12 }, "+=.3"); }
+    else { gsap.set(b, { opacity: 0 }); tl.to(a, { scale: .68, duration: .22 }).to(a, { scale: 1, duration: .5 }); }
+    tls.push(tl);
+  });
+  const key = (e) => { if (e.key === "Enter" || e.key === "Escape") close(); };
+  function close() {
+    if (box.hidden) return;
+    music.start(); tiltStart();
+    removeEventListener("keydown", key);
+    gsap.to(box, { opacity: 0, duration: .35, ease: "power2.out", onComplete: () => { box.hidden = true; tls.forEach((t) => t.kill()); } });
+  }
+  $("#gOk").addEventListener("click", close);
+  addEventListener("keydown", key);
+  $("#gOk").focus();
+}
+
+/* ---------- les connexions : des filaments entre souvenirs, parcourus par des influx. Ils s'allument quand deux orbites se frôlent ---------- */
+const LVERT = /* glsl */ `
+uniform float uT, uRoll, uAgit, uClock, uIntro, uSwell;
+uniform mat3 uGyro;
+attribute vec4 aA;
+attribute vec4 aB;
+attribute vec3 aA2;
+attribute vec3 aB2;
+attribute float aT;
+attribute float aS;
+varying float vB;
+const float TAU = 6.28318530718;
+vec3 rotX(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c); }
+vec3 rotY(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c + p.z * s, p.y, p.z * c - p.x * s); }
+vec3 kepler(float a, float e, float M, float inc, float node, float om) {
+  float E = M + e * sin(M);
+  for (int i = 0; i < 5; i++) E -= (E - e * sin(E) - M) / (1. - e * cos(E));
+  vec3 q = vec3(a * (cos(E) - e), 0., a * sqrt(1. - e * e) * sin(E));
+  return rotY(rotX(rotY(q, om), inc), node);
+}
+vec3 centre(vec4 o, vec3 o2) { return uGyro * (kepler(o.x, o2.x, o.y + uT * o.w * TAU, o.z, o2.y, o2.z) * (1. + uSwell)); }
+void main() {
+  vec3 A = centre(aA, aA2), B = centre(aB, aB2);
+  float len = length(A - B), arch = sin(aT * 3.14159265);
+  vec3 P = mix(A, B, aT);
+  /* le filament s'arrondit et ondule lentement, comme un axone */
+  P += normalize(A + B + vec3(0., .001, 0.)) * arch * len * (.1 + .05 * sin(uT * TAU * 2. + aS * 20.));
+  P.y += arch * len * .07 * sin(uT * TAU * 3. + aS * 37. + aT * 4.);
+  P += vec3(sin(aT * 40. + uClock * 17. + aS * 9.), sin(aT * 33. + uClock * 13.), sin(aT * 27. + uClock * 11.)) * uAgit * .14 * arch;
+  /* l'influx : un point de lumière qui parcourt le filament. Deux souvenirs éloignés ne sont plus reliés */
+  float pulse = exp(-pow((aT - fract(uT * (4. + floor(aS * 5.)) + aS)) / .07, 2.));
+  vB = (.05 + .85 * pulse + uAgit * .4) * smoothstep(4.8, 2.4, len) * smoothstep(0., .12, arch) * uIntro;
+  gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.);
+}`;
+const LFRAG = /* glsl */ `
+varying float vB;
+void main() {
+  gl_FragColor = vec4(vec3(.62, .82, 1.) * vB, vB);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+const ADD = { transparent: true, depthWrite: false, depthTest: true, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor };
+function buildLinks() {
+  const SEG = 30, A = [], B = [], A2 = [], B2 = [], T = [], Sd = [], ps = [], seen = new Set(), N = plates.length;
+  const link = (p, q) => {
+    if (!p || !q || p === q) return;
+    const key = Math.min(p.n, q.n) + "-" + Math.max(p.n, q.n);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const sd = R();
+    for (let i = 0; i < SEG; i++) [i / SEG, (i + 1) / SEG].forEach((t) => { A.push(p.R, p.phase, p.tilt, p.turns); B.push(q.R, q.phase, q.tilt, q.turns); A2.push(p.e, p.node, p.om); B2.push(q.e, q.node, q.om); T.push(t); Sd.push(sd); ps.push(0, 0, 0); });
+  };
+  plates.forEach((P, i) => { link(P, plates[(i + 1) % N]); link(P, plates[(i + 5) % N]); if (i % 2 === 0) link(P, plates[(i + 11) % N]); });   // ses voisins dans le temps, et d'autres plus loin
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(ps, 3));
+  geo.setAttribute("aA", new THREE.Float32BufferAttribute(A, 4));
+  geo.setAttribute("aB", new THREE.Float32BufferAttribute(B, 4));
+  geo.setAttribute("aA2", new THREE.Float32BufferAttribute(A2, 3));
+  geo.setAttribute("aB2", new THREE.Float32BufferAttribute(B2, 3));
+  geo.setAttribute("aT", new THREE.Float32BufferAttribute(T, 1));
+  geo.setAttribute("aS", new THREE.Float32BufferAttribute(Sd, 1));
+  const lines = new THREE.LineSegments(geo, new THREE.ShaderMaterial({
+    uniforms: { uT: U.uT, uRoll: U.uRoll, uAgit: U.uAgit, uClock: U.uClock, uIntro: U.uIntro, uSwell: U.uSwell, uGyro: U.uGyro }, vertexShader: LVERT, fragmentShader: LFRAG, ...ADD
+  }));
+  lines.frustumCulled = false;
+  scene.add(lines);
+  G.links = seen.size;
+}
+
+/* ---------- les axes : l'orbite de chaque souvenir en filigrane, et une traînée lumineuse derrière lui. Celle du souvenir visé s'allume ---------- */
+const OVERT = /* glsl */ `
+uniform float uT, uIntro, uSwell, uTrail, uFilt;
+uniform mat3 uGyro;
+uniform vec4 uFocus;
+uniform float uMatch[64];
+attribute vec4 aA;
+attribute vec4 aB;
+attribute vec2 aV;
+varying float vB;
+const float TAU = 6.28318530718;
+vec3 rotX(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c); }
+vec3 rotY(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c + p.z * s, p.y, p.z * c - p.x * s); }
+vec3 kepler(float a, float e, float M, float inc, float node, float om) {
+  float E = M + e * sin(M);
+  for (int i = 0; i < 5; i++) E -= (E - e * sin(E) - M) / (1. - e * cos(E));
+  vec3 q = vec3(a * (cos(E) - e), 0., a * sqrt(1. - e * e) * sin(E));
+  return rotY(rotX(rotY(q, om), inc), node);
+}
+void main() {
+  float trail = aB.w;
+  float Mp = aA.y + uT * aA.w * TAU;
+  float M = trail < .5 ? aV.x * TAU : Mp - sign(aA.w) * aV.x * TAU * uTrail;
+  vec3 P = uGyro * (kepler(aA.x, aB.x, M, aA.z, aB.y, aB.z) * (1. + uSwell));
+  float mine = step(abs(aA.x - uFocus.x) + abs(aA.y - uFocus.y), .0005);
+  float mt = aV.y < -.5 || aV.y > 63.5 ? 1. : uMatch[int(aV.y + .5)];
+  float b = trail < .5 ? .04 + .5 * mine : pow(1. - aV.x, 2.2) * (.5 + .5 * mine);
+  vB = b * (1. - uFilt * (1. - mt) * .85) * uIntro;
+  gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.);
+}`;
+function buildOrbits() {
+  const ELL = 64, TR = 40, A = [], B = [], V = [], ps = [];
+  plates.forEach((P) => {
+    const put = (mode, n) => { for (let i = 0; i < n; i++) [i / n, (i + 1) / n].forEach((t) => { A.push(P.R, P.phase, P.tilt, P.turns); B.push(P.e, P.node, P.om, mode); V.push(t, P.n < 64 ? P.n : -1); ps.push(0, 0, 0); }); };
+    put(0, ELL); put(1, TR);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(ps, 3));
+  geo.setAttribute("aA", new THREE.Float32BufferAttribute(A, 4));
+  geo.setAttribute("aB", new THREE.Float32BufferAttribute(B, 4));
+  geo.setAttribute("aV", new THREE.Float32BufferAttribute(V, 2));
+  const lines = new THREE.LineSegments(geo, new THREE.ShaderMaterial({
+    uniforms: { uT: U.uT, uIntro: U.uIntro, uSwell: U.uSwell, uTrail: { value: C.trail }, uFilt: U.uFilt, uGyro: U.uGyro, uFocus: U.uFocus, uMatch: U.uMatch }, vertexShader: OVERT, fragmentShader: LFRAG, ...ADD
+  }));
+  lines.frustumCulled = false;
+  scene.add(lines);
+}
+
+/* ---------- mise en route ---------- */
+async function start() {
+  const images = await findImages();
+  const tainted = buildPlates(images);
+  G.total = pos.length / 3;
+  buildSpace();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 3));
+  geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seed, 4));
+  geo.setAttribute("aOrb", new THREE.Float32BufferAttribute(orb, 4));
+  geo.setAttribute("aOrb2", new THREE.Float32BufferAttribute(orb2, 4));
+  geo.setAttribute("aKind", new THREE.Float32BufferAttribute(kind, 1));
+  geo.setAttribute("aIdx", new THREE.Float32BufferAttribute(pidx, 1));
+  material = new THREE.ShaderMaterial({
+    uniforms: U, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthTest: true,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor
+  });
+  points = new THREE.Points(geo, material);
+  hdMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false, toneMapped: false }));
+  hdMesh.visible = false; hdMesh.renderOrder = 1; hdMesh.frustumCulled = false;
+  scene.add(hdMesh);
+  points.frustumCulled = false;                                      // les positions sont calculées sur la carte graphique
+  scene.add(points);
+  if (C.links) buildLinks();
+  if (C.axes) buildOrbits();
+  planStrikes(); buildStriker(); wirePanel(); buildRail();
+  $("#navP").addEventListener("click", () => swipeTo(-1)); $("#navN").addEventListener("click", () => swipeTo(1)); $("#navX").addEventListener("click", () => dismiss());
+
+  bloomOn = C.bloom === true || (C.bloom === "auto" && !lite);
+  if (bloomOn) {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, cam));
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), C.bloomStrength, .45, .5);
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+  }
+  let s = 0;                                                         // part moyenne du trajet où un point voyageur est loin de son visuel
+  for (let i = 0; i < 400; i++) { const u = (i + .5) / 400, a = gsap.utils.clamp(0, 1, (u - .04) / .38), b = gsap.utils.clamp(0, 1, (u - .58) / .38); const k = a * a * (3 - 2 * a) * (1 - b * b * (3 - 2 * b)); s += k * k * (3 - 2 * k); }
+  G.awayMean = s / 400;
+  /* vue d'ensemble : la moyenne de tous les souvenirs, et leurs couleurs dominantes rangées par teinte */
+  const m = (f) => plates.reduce((a, q) => a + f(q.an), 0) / plates.length, hueOf = (c) => { const r = c[0], gg = c[1], b = c[2], mx = Math.max(r, gg, b), d = mx - Math.min(r, gg, b); return d < .08 ? 400 + mx : ((mx === r ? ((gg - b) / d) % 6 : mx === gg ? (b - r) / d + 2 : (r - gg) / d + 4) * 60 + 360) % 360; };
+  const part = plates[0].an.part.map((_, i) => m((a) => a.part[i])), L = m((a) => a.L), Cm = m((a) => a.C), warm = part[0] + part[1] + part[2] + .5 * part[7], cold = part[4] + part[5] + .5 * part[6] + .3 * part[3], hist = plates[0].an.hist.map((_, i) => m((a) => a.hist[i]));
+  G.all = {
+    pal: plates.map((q) => ({ share: 1 / plates.length, rgb: q.an.pal[Math.min(q.an.pal.length - 1, q.an.pal[0].rgb[0] + q.an.pal[0].rgb[1] + q.an.pal[0].rgb[2] < .25 ? 1 : 0)].rgb })).sort((a, b) => hueOf(a.rgb) - hueOf(b.rgb)),
+    part, L, C: Cm, hist: hist.map((v) => v / Math.max.apply(null, hist)),
+    lum: L < .3 ? "sombre" : L > .62 ? "claire" : "moyenne", temp: warm > cold * 1.3 ? "chaude" : cold > warm * 1.3 ? "froide" : "neutre",
+    amb: L < .3 ? (warm >= cold ? "Sombre chaud" : "Sombre froid") : "Mêlée"
+  };
+  resize();
+
+  const all = pos.length / 3, used = tainted || !images.length ? 0 : images.length;
+  $("#rPts").textContent = all.toLocaleString("fr-BE") + " particules";
+  $("#rImg").textContent = plates.length + " souvenirs" + (used ? "" : " (aplats)");
+  $("#rLoop").textContent = "Durée " + fr(C.loopDuration) + " s";
+  const rows = touchUI
+    ? [["●", "Un doigt qui glisse : tu fais tourner la galaxie, sur tous ses axes"], ["● ●", "Deux doigts écartés ou pincés : agrandir ou rétrécir"], ["●● ↻", "Deux doigts qui tournent : la galaxie pivote dans l'écran"], ["Appui", "Sur une photo : elle vient en HD, balaye ← → pour la suivante · sur le trou noir : tu attires les souvenirs"], ["Incline", "Incline le téléphone : la galaxie suit"], ["Couleur", "Touche une couleur du panneau : seuls ses souvenirs restent allumés"]]
+    : [["Glisser", "Tu fais tourner la galaxie sur tous ses axes · elle suit aussi tes moindres mouvements · double-clic : elle se remet d'aplomb"], ["●● ↕", "Deux doigts, haut ou bas : tu approches, l'image passe en HD, puis tu la traverses ; ou tu t'éloignes"], ["●● ↔", "Deux doigts de côté : tu tournes autour · sur une photo : tu passes à la suivante (ou ← →)"], ["● ●", "Pincer ou écarter : rétrécir ou agrandir"], ["Clic", "Sur une photo : elle reste en HD tant que tu appuies · dans le vide : tu troubles la mémoire"], ["Noyau", "Maintiens sur le trou noir : tu attires tous les souvenirs ; relâche, ils repartent sur d'autres axes"], ["Couleur", "Clique une couleur du panneau : seuls ses souvenirs restent allumés"], ["Frise", "À droite, glisse sur les années : tu plonges jusqu'au souvenir (les plus anciens sont sur les orbites lointaines)"]];
+  $("#navH").textContent = touchUI ? "Balaye ← →" : "← → · Échap";
+  $("#gh").textContent = touchUI ? "Touche un souvenir" : "Approche la souris d'un souvenir";
+  $("#gest").innerHTML = rows.map((r) => "<li><b>" + r[0] + "</b>" + r[1] + "</li>").join("");
+  if (!C.hud) { $("#ui").hidden = true; $("#bar").style.display = "none"; sight.style.display = "none"; }
+
+  const q = new URLSearchParams(location.search);
+  const frozen = q.has("p") ? clamp(0, 1, parseFloat(q.get("p")) || 0) : null;   // ?p=0.25 fige la boucle à 25 %
+
+  const mm = gsap.matchMedia();
+  mm.add({ move: "(prefers-reduced-motion: no-preference)", still: "(prefers-reduced-motion: reduce)" }, (ctx) => {
+    const still = ctx.conditions.still || frozen !== null;
+    state.p = frozen === null ? 0 : frozen;
+    if (still) { U.uIntro.value = 1; frame(); return; }             // mouvement réduit : une image fixe, rien ne bouge
+    const loop = gsap.to(state, { p: 1, duration: C.loopDuration, ease: "none", repeat: -1, onUpdate: frame });
+    if (C.intro) {
+      gsap.fromTo(U.uIntro, { value: 0 }, { value: 1, duration: 1.8, ease: "power2.out" });
+      gsap.from(".top > *, .form > *, .main > *", { opacity: 0, y: 12, duration: .5, ease: "power1.inOut", stagger: .04, delay: .2 });
+    } else U.uIntro.value = 1;
+    let fps = 60, last = 0;
+    let slow = 0, checked = 0;
+    const tick = (time, dt) => {
+      if (dt > 250) return;                                           // l'onglet dormait : on ne compte pas
+      fps += ((1000 / Math.max(1, dt)) - fps) * .08;
+      if (time - last > .5) { last = time; $("#rFps").textContent = "Images / s " + Math.round(fps); }
+      /* régulateur : sous 46 images par seconde pendant trois secondes, on baisse la densité du rendu, puis on coupe le halo */
+      if (time > 4 && time - checked > 1.5 && document.visibilityState === "visible") {
+        checked = time;
+        slow = fps < 46 ? slow + 1 : 0;
+        if (slow >= 2) {
+          slow = 0;
+          const r = renderer.getPixelRatio();
+          if (r > 1.01) { const n = Math.max(1, r - .25); renderer.setPixelRatio(n); if (composer) composer.setPixelRatio(n); resize(); }
+          else if (bloomOn) bloomOn = false;
+          window.LAB.quality = renderer.getPixelRatio() + (bloomOn ? " + halo" : "");
+        }
+      }
+    };
+    gsap.ticker.add(tick);
+    pointer(false);
+    window.LAB.loop = loop;
+    return () => gsap.ticker.remove(tick);
+  });
+
+  music.init();
+  if (C.guide && frozen === null) guide();
+  else { const go = () => { music.start(); tiltStart(); removeEventListener("pointerdown", go); removeEventListener("keydown", go); }; addEventListener("pointerdown", go); addEventListener("keydown", go); }
+  let rz = 0;
+  addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { resize(); frame(); }, 150); });
+  window.LAB.ready = true; window.LAB.images = used; window.LAB.points = all; window.LAB.bloom = bloomOn;
+}
+
+/* pour vérifier la boucle : sans souris, LAB.frame(0) et LAB.frame(1) doivent donner la même image (empreinte des pixels) */
+window.LAB = {
+  CONFIG: C, state, ptr, music, dv: G.dv, gy: G.gy, nc: G.nc, sw, focus, dive: (n) => startDive(plates[n]), exit: () => exitDive(), swipe: (d) => swipeTo(d), show: (n) => present(plates[n], true), plateAt: (n, p) => plateAt(plates[n], p, new THREE.Vector3()),
+  frame(p) {
+    const keep = { m: ptr.m, w: ptr.w, px: ptr.px, py: ptr.py, on: ptr.on, agit: ptr.agit, zoom: ptr.zoom, yaw: ptr.yaw, q: G.gy.q.clone(), gw: G.gy.w.clone(), gx: G.gy.x, gyy: G.gy.y, nk: G.nc.k, ns: G.nc.swell, nh: G.nc.hover, ncr: G.nc.crunch };
+    ptr.m = 0; ptr.w = 0; ptr.px = 0; ptr.py = 0; ptr.on = false; ptr.agit = 0; ptr.zoom = 1; ptr.yaw = 0; U.uFocus.value.x = -9;
+    G.gy.q.identity(); G.gy.w.set(0, 0, 0); G.gy.x = 0; G.gy.y = 0; G.nc.k = 0; G.nc.swell = 0; G.nc.hover = 0; G.nc.crunch = 0;
+    G.testing = true; state.p = p; frame(); G.testing = false;
+    const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(w * h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let hsh = 2166136261, lit = 0;
+    for (let i = 0; i < px.length; i += 4) { hsh = Math.imul(hsh ^ px[i], 16777619); hsh = Math.imul(hsh ^ px[i + 1], 16777619); hsh = Math.imul(hsh ^ px[i + 2], 16777619); if (px[i] + px[i + 1] + px[i + 2] > 24) lit++; }
+    Object.assign(ptr, { m: keep.m, w: keep.w, px: keep.px, py: keep.py, on: keep.on, agit: keep.agit, zoom: keep.zoom, yaw: keep.yaw });
+    G.gy.q.copy(keep.q); G.gy.w.copy(keep.gw); G.gy.x = keep.gx; G.gy.y = keep.gyy; G.nc.k = keep.nk; G.nc.swell = keep.ns; G.nc.hover = keep.nh; G.nc.crunch = keep.ncr;
+    return (hsh >>> 0).toString(16) + ":" + lit;
+  }
+};
+
+if (location.protocol === "file:") $("#local").hidden = false;
+start().catch((e) => { console.error(e); $("#fail").hidden = false; });
+</script>
+</body>
+</html>
